@@ -1,0 +1,17 @@
+# Reference clone of Twick (not part of this project — `git clone https://github.com/ncounterspecialist/twick`)
+twick/
+
+# deps & build
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# secrets & local data
+.env
+.env*.local
+.data/
+
+# os
+.DS_Store

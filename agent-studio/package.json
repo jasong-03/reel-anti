@@ -1,0 +1,36 @@
+{
+  "name": "agent-studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Antigravity for Video — agent-driven Twick studio (Phase 1 core loop)",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test:offline": "tsx scripts/offline-check.ts",
+    "test:apply": "tsx scripts/apply-integration.ts",
+    "test:loop": "tsx scripts/eval-loop.ts",
+    "test:gates": "tsx scripts/gate-suite.ts"
+  },
+  "dependencies": {
+    "@google/genai": "2.10.0",
+    "@twick/browser-render": "0.15.31",
+    "@twick/live-player": "0.15.31",
+    "@twick/studio": "0.15.31",
+    "@twick/timeline": "0.15.31",
+    "next": "14.2.32",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "20.14.10",
+    "@types/react": "18.3.3",
+    "@types/react-dom": "18.3.0",
+    "dotenv": "16.4.5",
+    "tsx": "4.19.2",
+    "typescript": "5.5.4"
+  }
+}
