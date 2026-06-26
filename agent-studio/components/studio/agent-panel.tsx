@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTimelineContext } from "@twick/timeline";
+import { useLivePlayerContext } from "@twick/live-player";
 import type { ProjectJSON } from "@twick/timeline";
 import { applyOps, type OpResult } from "@/lib/twick/apply-op";
 import type { Op } from "@/lib/twick/ops";
@@ -89,10 +90,13 @@ function useReveal(text: string, on: boolean): string {
 
 export default function AgentPanel({ onApplied }: { onApplied?: (info: AppliedInfo) => void }) {
   const { editor, videoResolution } = useTimelineContext();
+  const { currentTime } = useLivePlayerContext();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [listening, setListening] = useState(false);
   const idRef = useRef(0);
+  const recogRef = useRef<unknown>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
@@ -155,6 +159,57 @@ export default function AgentPanel({ onApplied }: { onApplied?: (info: AppliedIn
     setTurns((p) => p.map((t) => (t.id === turnId ? { ...t, reverted: true } : t)));
   }, [turns, editor]);
 
+  // Attach: import local files to the timeline at the playhead.
+  const attach = useCallback(() => {
+    const fi = document.createElement("input");
+    fi.type = "file";
+    fi.accept = "video/*,image/*,audio/*";
+    fi.multiple = true;
+    fi.onchange = async () => {
+      const files = Array.from(fi.files ?? []);
+      const ops: Op[] = files.map((f) => {
+        const url = URL.createObjectURL(f);
+        const kind = f.type.startsWith("video") ? "video" : f.type.startsWith("audio") ? "audio" : "image";
+        return kind === "image"
+          ? { op: "addMedia", mediaType: "image", src: url, start: currentTime, end: currentTime + 4 }
+          : { op: "addMedia", mediaType: kind, src: url, start: currentTime };
+      });
+      if (!ops.length) return;
+      const results = await applyOps(editor, ops, videoResolution);
+      onApplied?.({ affectedIds: results.flatMap((r) => r.affected ?? []), seekTo: currentTime });
+      push({ role: "ai", text: `Imported ${files.length} file(s) to the timeline.` });
+    };
+    fi.click();
+  }, [editor, videoResolution, currentTime, onApplied, push]);
+
+  // Voice: Web Speech API → fill the prompt.
+  const toggleVoice = useCallback(() => {
+    type SpeechRec = {
+      lang: string; interimResults: boolean; continuous: boolean;
+      start: () => void; stop: () => void;
+      onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+      onend: (() => void) | null; onerror: (() => void) | null;
+    };
+    const w = window as unknown as { SpeechRecognition?: new () => SpeechRec; webkitSpeechRecognition?: new () => SpeechRec };
+    const SR = w.SpeechRecognition ?? w.webkitSpeechRecognition;
+    if (!SR) { push({ role: "error", text: "Voice input is not supported in this browser." }); return; }
+    if (listening) { (recogRef.current as SpeechRec | null)?.stop(); setListening(false); return; }
+    const rec = new SR();
+    rec.lang = "en-US";
+    rec.interimResults = true;
+    rec.continuous = false;
+    rec.onresult = (e) => {
+      const text = Array.from(e.results).map((r) => r[0].transcript).join("");
+      setInput(text);
+      requestAnimationFrame(autoGrow);
+    };
+    rec.onend = () => setListening(false);
+    rec.onerror = () => setListening(false);
+    recogRef.current = rec;
+    rec.start();
+    setListening(true);
+  }, [listening, push, autoGrow]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       {/* header */}
@@ -195,8 +250,8 @@ export default function AgentPanel({ onApplied }: { onApplied?: (info: AppliedIn
             disabled={busy}
             style={{ flex: 1, resize: "none", background: "transparent", border: "none", outline: "none", color: "var(--text-1)", font: "inherit", fontSize: 13.5, lineHeight: 1.5, maxHeight: 160, padding: "4px 4px" }}
           />
-          <button className="icon-btn" aria-label="Attach" style={{ width: 32, height: 32 }}><Paperclip width={17} /></button>
-          <button className="icon-btn" aria-label="Voice input" style={{ width: 32, height: 32 }}><Mic width={17} /></button>
+          <button className="icon-btn" aria-label="Attach media" onClick={attach} style={{ width: 32, height: 32 }}><Paperclip width={17} /></button>
+          <button className="icon-btn" aria-label="Voice input" onClick={toggleVoice} style={{ width: 32, height: 32, color: listening ? "var(--danger)" : undefined, background: listening ? "rgba(244,98,106,0.12)" : undefined }}><Mic width={17} /></button>
           <button
             aria-label="Send"
             onClick={() => void send()}

@@ -27,14 +27,37 @@ const fmt = (sec: number): string => {
 };
 
 export default function CenterWorkspace({ videoProps }: { videoProps: VideoProps }) {
-  const { totalDuration } = useTimelineContext();
+  const { totalDuration, videoResolution } = useTimelineContext();
+  // Use the live resolution from context so the Settings panel can change it.
+  const vp = videoResolution ?? videoProps;
   const { playerState, currentTime, seekTime, playerVolume, setPlayerState, setCurrentTime, setSeekTime, setPlayerVolume } =
     useLivePlayerContext();
-  const projectData = usePlayerData(videoProps);
+  const projectData = usePlayerData(vp);
   const durationRef = useRef(0);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const lastVol = useRef(0.25);
   const ZOOMS = ["Fit", "100%", "150%", "200%"];
   const [zoom, setZoom] = useState("Fit");
   const zoomScale = zoom === "Fit" ? 1 : Number(zoom.replace("%", "")) / 100;
+
+  const fullscreen = () => previewRef.current?.requestFullscreen?.().catch(() => {});
+  const toggleMute = () => {
+    if (playerVolume > 0) { lastVol.current = playerVolume; setPlayerVolume(0); }
+    else setPlayerVolume(lastVol.current || 0.25);
+  };
+  const snapshot = () => {
+    const canvas = previewRef.current?.querySelector("canvas");
+    if (!canvas) return;
+    try {
+      const a = document.createElement("a");
+      a.href = canvas.toDataURL("image/png");
+      a.download = `snapshot-${fmt(currentTime).replace(":", "-")}.png`;
+      a.click();
+    } catch {
+      // canvas tainted by a cross-origin video frame — can't export that frame
+      alert("Cannot snapshot a cross-origin video frame. Use an uploaded/local clip.");
+    }
+  };
 
   const playing = playerState === PLAYER_STATE.PLAYING;
   const duration = Math.max(totalDuration, durationRef.current);
@@ -78,7 +101,7 @@ export default function CenterWorkspace({ videoProps }: { videoProps: VideoProps
           <button className="btn" style={{ height: 30, fontSize: 12.5, minWidth: 74 }} onClick={() => setZoom(ZOOMS[(ZOOMS.indexOf(zoom) + 1) % ZOOMS.length])}>
             {zoom} <ChevronDown width={14} />
           </button>
-          <button className="icon-btn" aria-label="Fullscreen">
+          <button className="icon-btn" aria-label="Fullscreen" onClick={fullscreen}>
             <Maximize width={17} />
           </button>
         </div>
@@ -95,11 +118,12 @@ export default function CenterWorkspace({ videoProps }: { videoProps: VideoProps
         }}
       >
         <div
+          ref={previewRef}
           style={{
             position: "relative",
             width: "100%",
             maxWidth: "min(100%, calc((100vh - 360px) * 16 / 9))",
-            aspectRatio: `${videoProps.width} / ${videoProps.height}`,
+            aspectRatio: `${vp.width} / ${vp.height}`,
             borderRadius: 14,
             overflow: "hidden",
             border: "1px solid var(--border-strong)",
@@ -111,7 +135,7 @@ export default function CenterWorkspace({ videoProps }: { videoProps: VideoProps
             <LivePlayer
               playing={playing}
               projectData={projectData}
-              videoSize={videoProps}
+              videoSize={vp}
               seekTime={seekTime}
               volume={playerVolume}
               onTimeUpdate={handleTimeUpdate}
@@ -174,9 +198,9 @@ export default function CenterWorkspace({ videoProps }: { videoProps: VideoProps
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 96, justifyContent: "flex-end" }}>
-            <button className="icon-btn" aria-label="Screen preview"><Screen width={17} /></button>
-            <button className="icon-btn" aria-label="Snapshot"><Camera width={17} /></button>
-            <button className="icon-btn" aria-label="Volume"><Volume width={17} /></button>
+            <button className="icon-btn" aria-label="Fullscreen preview" onClick={fullscreen}><Screen width={17} /></button>
+            <button className="icon-btn" aria-label="Snapshot frame" onClick={snapshot}><Camera width={17} /></button>
+            <button className="icon-btn" aria-label={playerVolume > 0 ? "Mute" : "Unmute"} onClick={toggleMute} style={{ color: playerVolume === 0 ? "var(--danger)" : undefined }}><Volume width={17} /></button>
             <input
               type="range"
               min={0}

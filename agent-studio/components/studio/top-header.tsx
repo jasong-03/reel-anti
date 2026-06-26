@@ -1,18 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTimelineContext } from "@twick/timeline";
 import { useBrowserRenderer } from "@twick/browser-render";
 import { saveProject } from "@/lib/twick/persistence";
 import { Sparkles, Undo, Redo, Cloud, Help, Bell, Export, ChevronDown, Check } from "./icons";
 
-type SaveState = "saved" | "saving" | "unsaved";
-
 export default function TopHeader() {
-  const { editor, canUndo, canRedo, videoResolution } = useTimelineContext();
-  const [save, setSave] = useState<SaveState>("saved");
+  const { editor, canUndo, canRedo, videoResolution, changeLog } = useTimelineContext();
+  const [saving, setSaving] = useState(false);
   const [name, setName] = useState("Road Trip Adventure");
   const [editingName, setEditingName] = useState(false);
+  // Baseline captured at mount; the project is "dirty" whenever changeLog moves past it.
+  const savedAt = useRef(changeLog);
+  const [, forceTick] = useState(0);
+  const dirty = changeLog !== savedAt.current;
 
   const { render, isRendering, progress } = useBrowserRenderer({
     width: videoResolution.width,
@@ -25,12 +27,13 @@ export default function TopHeader() {
   });
 
   const onSave = async () => {
-    setSave("saving");
+    setSaving(true);
     try {
       await saveProject(editor);
-      setSave("saved");
-    } catch {
-      setSave("unsaved");
+      savedAt.current = changeLog;
+      forceTick((t) => t + 1);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -92,9 +95,9 @@ export default function TopHeader() {
           <button className="icon-btn" aria-label="Redo" disabled={!canRedo} onClick={() => editor.redo()} style={{ opacity: canRedo ? 1 : 0.4 }}><Redo width={18} /></button>
         </div>
 
-        <button className="btn btn-ghost" onClick={onSave} style={{ height: 32, gap: 7, color: save === "saved" ? "var(--success)" : "var(--text-2)", fontSize: 13 }}>
-          {save === "saved" ? <Check width={15} /> : <Cloud width={16} />}
-          {save === "saving" ? "Saving…" : save === "saved" ? "Saved" : "Save"}
+        <button className="btn btn-ghost" onClick={onSave} disabled={saving} style={{ height: 32, gap: 7, color: !dirty ? "var(--success)" : "var(--text-2)", fontSize: 13 }}>
+          {!dirty ? <Check width={15} /> : <Cloud width={16} />}
+          {saving ? "Saving…" : dirty ? "Save" : "Saved"}
         </button>
       </div>
 

@@ -4,9 +4,10 @@ import { useCallback, useRef, useState } from "react";
 import { LivePlayerProvider, PLAYER_STATE, useLivePlayerContext } from "@twick/live-player";
 import { TimelineProvider } from "@twick/timeline";
 import TopHeader from "./studio/top-header";
-import LeftNav, { type NavId } from "./studio/left-nav";
+import LeftNav, { type NavId, type PanelId } from "./studio/left-nav";
 import AgentPanel, { type AppliedInfo } from "./studio/agent-panel";
 import SidePanel from "./studio/side-panel";
+import { SettingsPanel, FeedbackPanel } from "./studio/meta-panels";
 import CenterWorkspace from "./studio/center-workspace";
 import PropertiesPanel from "./studio/properties-panel";
 import TimelinePanel from "./studio/timeline-panel";
@@ -48,7 +49,7 @@ const INITIAL_PROJECT = {
 
 function StudioLayout() {
   const { setCurrentTime, setSeekTime, setPlayerState } = useLivePlayerContext();
-  const [nav, setNav] = useState<NavId>("agent");
+  const [nav, setNav] = useState<PanelId>("agent");
   const [glowIds, setGlowIds] = useState<Set<string>>(new Set());
   const glowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -69,7 +70,15 @@ function StudioLayout() {
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         <LeftNav active={nav} onSelect={setNav} />
         <div style={{ width: "27%", minWidth: 320, maxWidth: 420, flexShrink: 0, borderRight: "1px solid var(--border)", background: "rgba(7,11,22,0.55)", minHeight: 0 }}>
-          {nav === "agent" ? <AgentPanel onApplied={onApplied} /> : <SidePanel nav={nav} onApplied={onApplied} />}
+          {nav === "agent" ? (
+            <AgentPanel onApplied={onApplied} />
+          ) : nav === "settings" ? (
+            <SettingsPanel />
+          ) : nav === "feedback" ? (
+            <FeedbackPanel />
+          ) : (
+            <SidePanel nav={nav as NavId} onApplied={onApplied} />
+          )}
         </div>
         <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, minHeight: 0 }}>
           <div style={{ display: "flex", flex: 1, minHeight: 0 }}>

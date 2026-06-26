@@ -24,6 +24,9 @@ export type NavId =
   | "effects"
   | "transitions";
 
+/** Full set of left-panel ids, including the bottom meta items. */
+export type PanelId = NavId | "settings" | "feedback";
+
 type Item = { id: NavId; label: string; Icon: ComponentType<SVGProps<SVGSVGElement>> };
 
 const MAIN: Item[] = [
@@ -41,8 +44,8 @@ export default function LeftNav({
   active,
   onSelect,
 }: {
-  active: NavId;
-  onSelect: (id: NavId) => void;
+  active: PanelId;
+  onSelect: (id: PanelId) => void;
 }) {
   return (
     <nav
@@ -72,8 +75,8 @@ export default function LeftNav({
       </div>
 
       <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 2, width: "100%" }}>
-        <button className="nav-item"><Settings width={20} />Settings</button>
-        <button className="nav-item"><Feedback width={20} />Feedback</button>
+        <button className="nav-item" aria-current={active === "settings"} onClick={() => onSelect("settings")}><Settings width={20} />Settings</button>
+        <button className="nav-item" aria-current={active === "feedback"} onClick={() => onSelect("feedback")}><Feedback width={20} />Feedback</button>
       </div>
     </nav>
   );
