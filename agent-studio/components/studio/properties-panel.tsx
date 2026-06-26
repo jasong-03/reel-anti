@@ -10,6 +10,7 @@ type Tab = (typeof TABS)[number];
 
 const FILTERS = ["none", "grayscale", "sepia", "invert", "warm", "cold"];
 const ANIMS = ["none", "fade", "rise", "pop", "blur"];
+const FITS = ["cover", "contain", "fill", "none"];
 
 const isElement = (item: unknown): item is TrackElement =>
   !!item && typeof (item as { getOpacity?: unknown }).getOpacity === "function";
@@ -126,6 +127,14 @@ export default function PropertiesPanel() {
     editor.updateElement(live);
   };
 
+  const objectFit = (el as unknown as { getObjectFit?: () => string } | null)?.getObjectFit?.() ?? "cover";
+  const setFit = (val: string) => {
+    if (!el) return;
+    const live = getLive(el.getId());
+    (live as unknown as { setObjectFit?: (v: string) => void } | null)?.setObjectFit?.(val);
+    if (live) editor.updateElement(live);
+  };
+
   return (
     <aside style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", borderLeft: "1px solid var(--border)", background: "rgba(5,8,16,0.4)" }}>
       <div style={{ padding: "16px 16px 10px" }}>
@@ -185,6 +194,16 @@ export default function PropertiesPanel() {
                 </Row>
               )}
             </Accordion>
+
+            {hasVisualFilter && (
+              <Accordion title="Crop / Fit" defaultOpen>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+                  {FITS.map((f) => (
+                    <button key={f} className={`chip${objectFit === f ? " chip-static" : ""}`} onClick={() => setFit(f)} style={{ height: 28 }}>{f}</button>
+                  ))}
+                </div>
+              </Accordion>
+            )}
           </>
         )}
 

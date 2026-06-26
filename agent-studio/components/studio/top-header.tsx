@@ -11,6 +11,7 @@ export default function TopHeader() {
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("Road Trip Adventure");
   const [editingName, setEditingName] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
   // Baseline captured at mount; the project is "dirty" whenever changeLog moves past it.
   const savedAt = useRef(changeLog);
   const [, forceTick] = useState(0);
@@ -105,8 +106,16 @@ export default function TopHeader() {
         <button className="btn btn-primary" onClick={onExport} disabled={isRendering} style={{ height: 38, padding: "0 18px", minWidth: 116 }}>
           <Export width={17} /> {isRendering ? `${Math.round(progress * 100)}%` : "Export"}
         </button>
-        <button className="icon-btn" aria-label="Help"><Help width={18} /></button>
-        <button className="icon-btn" aria-label="Notifications"><Bell width={18} /></button>
+        <button className="icon-btn" aria-label="Help" onClick={() => window.open("https://github.com/jasong-03/reel-anti", "_blank", "noreferrer")}><Help width={18} /></button>
+        <div style={{ position: "relative" }}>
+          <button className="icon-btn" aria-label="Notifications" onClick={() => setNotifOpen((o) => !o)}><Bell width={18} /></button>
+          {notifOpen && (
+            <div onMouseLeave={() => setNotifOpen(false)} style={{ position: "absolute", top: 42, right: 0, width: 240, padding: 14, borderRadius: 12, background: "var(--panel-raised)", border: "1px solid var(--border)", boxShadow: "0 16px 40px -16px rgba(0,0,0,0.7)", zIndex: 50 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Notifications</div>
+              <div style={{ fontSize: 12.5, color: "var(--text-3)" }}>You&apos;re all caught up. 🎬</div>
+            </div>
+          )}
+        </div>
         <span style={{ width: 32, height: 32, borderRadius: "50%", display: "grid", placeItems: "center", background: "linear-gradient(135deg, #6d5cff, var(--accent))", color: "#fff", fontWeight: 700, fontSize: 13 }}>N</span>
       </div>
     </header>

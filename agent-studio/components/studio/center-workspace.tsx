@@ -95,7 +95,7 @@ export default function CenterWorkspace({ videoProps }: { videoProps: VideoProps
           Sequence 01 <ChevronDown width={15} />
         </button>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <button className="btn" style={{ height: 30, fontSize: 12.5 }}>
+          <button className="btn" style={{ height: 30, fontSize: 12.5 }} onClick={() => setZoom("Fit")}>
             Fit <ChevronDown width={14} />
           </button>
           <button className="btn" style={{ height: 30, fontSize: 12.5, minWidth: 74 }} onClick={() => setZoom(ZOOMS[(ZOOMS.indexOf(zoom) + 1) % ZOOMS.length])}>

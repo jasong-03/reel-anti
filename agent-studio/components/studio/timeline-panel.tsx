@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useTimelineContext } from "@twick/timeline";
+import { useTimelineContext, TRACK_TYPES } from "@twick/timeline";
 import type { TrackElement, TrackJSON, ElementJSON } from "@twick/timeline";
 import { PLAYER_STATE, useLivePlayerContext } from "@twick/live-player";
 import { Cursor, Undo, Redo, Scissors, SplitIcon, Trash, More, Magnet, Search, Plus, Minus, ChevronDown } from "./icons";
@@ -47,6 +47,9 @@ export default function TimelinePanel({ glowIds }: { glowIds: Set<string> }) {
   const { currentTime, setCurrentTime, setSeekTime, setPlayerState } = useLivePlayerContext();
   const [pps, setPps] = useState(26);
   const [snap, setSnap] = useState(true);
+  const [snapStep, setSnapStep] = useState(0.5);
+  const [menu, setMenu] = useState<null | "add" | "snap" | "search">(null);
+  const [search, setSearch] = useState("");
   const [drag, setDrag] = useState<DragState | null>(null);
   const [draft, setDraft] = useState<{ id: string; s: number; e: number } | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -66,7 +69,16 @@ export default function TimelinePanel({ glowIds }: { glowIds: Set<string> }) {
   const ticks = useMemo(() => Array.from({ length: Math.floor(duration / 5) + 1 }, (_, i) => i * 5), [duration]);
   const selectedId = (selectedItem as { getId?: () => string } | null)?.getId?.();
 
-  const snapVal = (t: number) => (snap ? Math.round(t * 2) / 2 : Math.round(t * 100) / 100);
+  const snapVal = (t: number) => (snap ? Math.round(t / snapStep) * snapStep : Math.round(t * 100) / 100);
+
+  const searchLc = search.trim().toLowerCase();
+  const matches = (el: ElementJSON) => !searchLc || clipLabel(el).toLowerCase().includes(searchLc);
+
+  const addTrackOfType = (label: string, type: string) => { editor.addTrack(label, type); setMenu(null); };
+  const cutSelected = () => {
+    const el = liveElement(selectedId ?? "");
+    if (el) void editor.rippleDelete(el.getStart(), el.getEnd());
+  };
 
   // drag lifecycle
   useEffect(() => {
@@ -136,23 +148,45 @@ export default function TimelinePanel({ glowIds }: { glowIds: Set<string> }) {
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, background: "rgba(5,8,16,0.55)", borderTop: "1px solid var(--border)" }}>
       {/* toolbar */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px", borderBottom: "1px solid var(--border)" }}>
-        <button className="btn" style={{ height: 32, fontSize: 12.5 }} onClick={() => editor.addTrack("Track", "element")}>
-          <Plus width={15} /> Add Track
-        </button>
+        <div style={{ position: "relative" }}>
+          <button className="btn" style={{ height: 32, fontSize: 12.5 }} onClick={() => setMenu(menu === "add" ? null : "add")}>
+            <Plus width={15} /> Add Track <ChevronDown width={13} />
+          </button>
+          {menu === "add" && (
+            <Popover onClose={() => setMenu(null)}>
+              <MenuItem label="Video track" onClick={() => addTrackOfType("Video Track", TRACK_TYPES.VIDEO)} />
+              <MenuItem label="Audio track" onClick={() => addTrackOfType("Audio Track", TRACK_TYPES.AUDIO)} />
+              <MenuItem label="Text / element" onClick={() => addTrackOfType("Element Track", TRACK_TYPES.ELEMENT)} />
+              <MenuItem label="Caption track" onClick={() => addTrackOfType("Caption", TRACK_TYPES.CAPTION)} />
+            </Popover>
+          )}
+        </div>
         <div style={{ width: 1, height: 22, background: "var(--border)" }} />
-        <button className="icon-btn" aria-label="Select"><Cursor width={17} /></button>
+        <button className="icon-btn" aria-label="Deselect" onClick={() => setSelectedItem(null)}><Cursor width={17} /></button>
         <button className="icon-btn" aria-label="Undo" disabled={!canUndo} onClick={() => editor.undo()} style={{ opacity: canUndo ? 1 : 0.4 }}><Undo width={17} /></button>
         <button className="icon-btn" aria-label="Redo" disabled={!canRedo} onClick={() => editor.redo()} style={{ opacity: canRedo ? 1 : 0.4 }}><Redo width={17} /></button>
-        <button className="icon-btn" aria-label="Cut at playhead" onClick={splitSelected}><Scissors width={17} /></button>
-        <button className="icon-btn" aria-label="Split" onClick={splitSelected}><SplitIcon width={17} /></button>
+        <button className="icon-btn" aria-label="Ripple cut selected" title="Ripple-delete the selected clip" onClick={cutSelected}><Scissors width={17} /></button>
+        <button className="icon-btn" aria-label="Split at playhead" title="Split the selected clip at the playhead" onClick={splitSelected}><SplitIcon width={17} /></button>
         <button className="icon-btn" aria-label="Delete" onClick={deleteSelected}><Trash width={17} /></button>
         <button className="icon-btn" aria-label="More"><More width={17} /></button>
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
-          <button className="btn" style={{ height: 30, fontSize: 12.5, gap: 6, color: snap ? "var(--accent-hover)" : "var(--text-2)" }} onClick={() => setSnap((s) => !s)} aria-pressed={snap}>
-            <Magnet width={15} /> Snap <ChevronDown width={13} />
-          </button>
-          <button className="icon-btn" aria-label="Search"><Search width={16} /></button>
+          {menu === "search" ? (
+            <input autoFocus className="field" placeholder="Find clip…" value={search} onChange={(e) => setSearch(e.target.value)} onBlur={() => !search && setMenu(null)} style={{ height: 30, width: 150, padding: "5px 10px", fontSize: 12.5 }} />
+          ) : (
+            <button className="icon-btn" aria-label="Search clips" onClick={() => setMenu("search")}><Search width={16} /></button>
+          )}
+          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            <button className="btn" style={{ height: 30, fontSize: 12.5, gap: 6, color: snap ? "var(--accent-hover)" : "var(--text-2)" }} onClick={() => setSnap((s) => !s)} aria-pressed={snap}>
+              <Magnet width={15} /> Snap {snap ? `${snapStep}s` : "off"}
+            </button>
+            <button className="icon-btn" aria-label="Snap step" onClick={() => setMenu(menu === "snap" ? null : "snap")} style={{ width: 24 }}><ChevronDown width={13} /></button>
+            {menu === "snap" && (
+              <Popover onClose={() => setMenu(null)} align="right">
+                {[0.1, 0.5, 1].map((s) => <MenuItem key={s} label={`${s}s grid`} active={snapStep === s} onClick={() => { setSnapStep(s); setSnap(true); setMenu(null); }} />)}
+              </Popover>
+            )}
+          </div>
           <div style={{ display: "flex", alignItems: "center", gap: 7, width: 150 }}>
             <Minus width={15} color="var(--text-3)" />
             <input type="range" min={8} max={64} value={pps} onChange={(e) => setPps(Number(e.target.value))} style={{ flex: 1 }} aria-label="Zoom" />
@@ -204,6 +238,7 @@ export default function TimelinePanel({ glowIds }: { glowIds: Set<string> }) {
                       onClick={(ev) => { ev.stopPropagation(); if (!didDrag.current) setSelectedItem(liveElement(el.id)); }}
                       style={{
                         left, width, cursor: "grab",
+                        opacity: matches(el) ? 1 : 0.28,
                         background: isAudio
                           ? "linear-gradient(180deg, rgba(31,157,107,0.4), rgba(31,157,107,0.2))"
                           : `linear-gradient(180deg, ${color}, color-mix(in srgb, ${color} 70%, #000))`,
@@ -229,5 +264,26 @@ export default function TimelinePanel({ glowIds }: { glowIds: Set<string> }) {
       </div>
       <span style={{ display: "none" }}>{changeLog}</span>
     </div>
+  );
+}
+
+function Popover({ children, onClose, align = "left" }: { children: React.ReactNode; onClose: () => void; align?: "left" | "right" }) {
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
+      <div style={{ position: "absolute", bottom: "calc(100% + 6px)", ...(align === "right" ? { right: 0 } : { left: 0 }), minWidth: 160, padding: 5, borderRadius: 10, background: "var(--panel-raised)", border: "1px solid var(--border)", boxShadow: "0 16px 40px -16px rgba(0,0,0,0.7)", zIndex: 41 }}>
+        {children}
+      </div>
+    </>
+  );
+}
+
+function MenuItem({ label, onClick, active }: { label: string; onClick: () => void; active?: boolean }) {
+  return (
+    <button onClick={onClick} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 10px", borderRadius: 7, border: "none", background: active ? "var(--accent-soft)" : "transparent", color: active ? "var(--accent-hover)" : "var(--text-1)", font: "inherit", fontSize: 12.5, cursor: "pointer" }}
+      onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "var(--surface-2)"; }}
+      onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}>
+      {label}
+    </button>
   );
 }

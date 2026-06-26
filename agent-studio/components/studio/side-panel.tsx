@@ -3,7 +3,7 @@
 import { useCallback, useState, type ReactNode } from "react";
 import { useTimelineContext } from "@twick/timeline";
 import { useLivePlayerContext } from "@twick/live-player";
-import type { TrackElement } from "@twick/timeline";
+import type { TrackElement, ProjectJSON, ElementJSON } from "@twick/timeline";
 import { applyOps } from "@/lib/twick/apply-op";
 import type { Op } from "@/lib/twick/ops";
 import type { NavId } from "./left-nav";
@@ -171,9 +171,9 @@ export default function SidePanel({ nav, onApplied }: { nav: NavId; onApplied?: 
       case "templates":
         return (
           <Section>
-            <Tile label="Minimal Title" onClick={() => loadTemplate(editor, "minimal")} />
-            <Tile label="Lower Third" onClick={() => loadTemplate(editor, "lower")} />
-            <Tile label="Bold Intro" onClick={() => loadTemplate(editor, "intro")} />
+            {TEMPLATES.map((t) => (
+              <Tile key={t.id} label={t.label} accent={t.accent} onClick={() => editor.loadProject(t.build())} />
+            ))}
           </Section>
         );
       default:
@@ -247,25 +247,35 @@ function addCrossfade(editor: ReturnType<typeof useTimelineContext>["editor"], d
   editor.addTransition(from.getId(), to.getId(), "crossfade", duration);
 }
 
-function loadTemplate(editor: ReturnType<typeof useTimelineContext>["editor"], kind: "minimal" | "lower" | "intro") {
-  const presets = {
-    minimal: { text: "Minimal", fontSize: 96, y: 0 },
-    lower: { text: "Lower Third", fontSize: 48, y: 220 },
-    intro: { text: "BOLD INTRO", fontSize: 120, y: 0 },
-  } as const;
-  const p = presets[kind];
-  editor.loadProject({
-    version: 1,
-    backgroundColor: "#070d1a",
-    tracks: [
-      {
-        id: "t-tpl",
-        name: "Titles",
-        type: "element",
-        elements: [
-          { id: `e-${kind}`, trackId: "t-tpl", name: p.text, type: "text", s: 0, e: 4, props: { text: p.text, fill: "#FFFFFF", fontSize: p.fontSize, y: p.y } },
-        ],
-      },
-    ],
-  });
-}
+/** Template gallery — each builds a full ProjectJSON loaded via editor.loadProject. */
+const text = (id: string, t: string, s: number, e: number, props: Record<string, unknown>): ElementJSON => ({ id, trackId: "t-txt", name: t, type: "text", s, e, props: { text: t, fill: "#FFFFFF", ...props } });
+const shape = (id: string, s: number, e: number, props: Record<string, unknown>): ElementJSON => ({ id, trackId: "t-fx", name: "shape", type: "rect", s, e, props });
+
+const TEMPLATES: { id: string; label: string; accent: string; build: () => ProjectJSON }[] = [
+  {
+    id: "minimal", label: "Minimal Title", accent: "var(--track-text)",
+    build: () => ({ version: 1, backgroundColor: "#070d1a", tracks: [{ id: "t-txt", name: "Titles", type: "element", elements: [text("e-1", "Minimal", 0, 4, { fontSize: 110 })] }] }),
+  },
+  {
+    id: "titlesub", label: "Title + Subtitle", accent: "var(--track-text)",
+    build: () => ({ version: 1, backgroundColor: "#070d1a", tracks: [{ id: "t-txt", name: "Titles", type: "element", elements: [text("e-1", "Your Title", 0, 5, { fontSize: 96, y: -60 }), text("e-2", "A short subtitle goes here", 0, 5, { fontSize: 40, y: 70, fill: "#9fb0c3" })] }] }),
+  },
+  {
+    id: "lower", label: "Lower Third", accent: "var(--accent)",
+    build: () => ({ version: 1, backgroundColor: "#070d1a", tracks: [
+      { id: "t-fx", name: "Bar", type: "element", elements: [shape("e-bar", 0, 5, { fill: "rgba(14,165,255,0.9)", width: 560, height: 90, radius: 8, x: -300, y: 240 })] },
+      { id: "t-txt", name: "Titles", type: "element", elements: [text("e-1", "Jane Doe", 0, 5, { fontSize: 44, x: -300, y: 225 }), text("e-2", "Director of Photography", 0, 5, { fontSize: 26, x: -300, y: 270, fill: "#dbe6f3" })] },
+    ] }),
+  },
+  {
+    id: "intro", label: "Bold Intro", accent: "#6d5cff",
+    build: () => ({ version: 1, backgroundColor: "#05070d", tracks: [
+      { id: "t-fx", name: "Accent", type: "element", elements: [shape("e-bar", 0, 4, { fill: "#0ea5ff", width: 360, height: 8, radius: 4, y: 90 })] },
+      { id: "t-txt", name: "Titles", type: "element", elements: [text("e-1", "BOLD INTRO", 0, 4, { fontSize: 128, fontWeight: 700 })] },
+    ] }),
+  },
+  {
+    id: "quote", label: "Quote", accent: "var(--track-effect)",
+    build: () => ({ version: 1, backgroundColor: "#0a0f1c", tracks: [{ id: "t-txt", name: "Titles", type: "element", elements: [text("e-1", "“Design is intelligence made visible.”", 0, 6, { fontSize: 56, y: -30 }), text("e-2", "— Alina Wheeler", 0, 6, { fontSize: 30, y: 90, fill: "#9fb0c3" })] }] }),
+  },
+];
