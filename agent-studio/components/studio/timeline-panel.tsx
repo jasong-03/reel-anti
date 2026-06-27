@@ -215,8 +215,8 @@ export default function TimelinePanel({ glowIds }: { glowIds: Set<string> }) {
         </div>
       </div>
 
-      {/* tracks */}
-      <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
+      {/* tracks — scroll vertically when there are more tracks than fit */}
+      <div style={{ display: "flex", flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden" }}>
         <div style={{ width: LABEL_W, flexShrink: 0, borderRight: "1px solid var(--border)", background: "rgba(5,8,16,0.5)" }}>
           <div style={{ height: RULER_H, borderBottom: "1px solid var(--border)" }} />
           {tracks.map((t) => (

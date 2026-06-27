@@ -178,7 +178,12 @@ export default function AgentPanel({ onApplied }: { onApplied?: (info: AppliedIn
   // Properties panel (Scale / Position) is immediately ready to make it a logo.
   const addImageToTimeline = useCallback(async (turnId: number, src: string, name?: string) => {
     const at = Math.round(currentTime * 10) / 10;
-    const results = await applyOps(editor, [{ op: "addMedia", mediaType: "image", src, start: at, end: at + 4, ...(name ? { name } : {}) }], videoResolution);
+    // Default the overlay to span the whole video (so it's a clear, full-width clip);
+    // the user then trims its edges or splits it to control when the logo shows.
+    let projEnd = 0;
+    for (const t of editor.getProject().tracks) for (const e of t.elements ?? []) projEnd = Math.max(projEnd, e.e ?? 0);
+    const end = Math.max(at + 4, projEnd);
+    const results = await applyOps(editor, [{ op: "addMedia", mediaType: "image", src, start: at, end, ...(name ? { name } : {}) }], videoResolution);
     const newId = results.flatMap((r) => r.affected ?? []).find((id) => id.startsWith("e-"));
     if (newId) {
       for (const tr of editor.getTimelineData()?.tracks ?? []) {

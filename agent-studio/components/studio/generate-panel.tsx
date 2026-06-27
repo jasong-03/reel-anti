@@ -81,9 +81,12 @@ export default function GeneratePanel({ onApplied }: { onApplied?: (i: AppliedIn
   const place = useCallback(
     async (src: string, k: Kind, name?: string) => {
       const at = Math.round(currentTime * 10) / 10;
+      // Images default to spanning the whole video (a clear, trimmable overlay clip).
+      let projEnd = 0;
+      for (const t of editor.getProject().tracks) for (const e of t.elements ?? []) projEnd = Math.max(projEnd, e.e ?? 0);
       const op: Op =
         k === "image"
-          ? { op: "addMedia", mediaType: "image", src, start: at, end: at + 4, ...(name ? { name } : {}) }
+          ? { op: "addMedia", mediaType: "image", src, start: at, end: Math.max(at + 4, projEnd), ...(name ? { name } : {}) }
           : { op: "addMedia", mediaType: "video", src, start: at, ...(name ? { name } : {}) };
       const results = await applyOps(editor, [op], videoResolution);
       if (name) addAsset({ name, src, type: k, origin: "generated" });
