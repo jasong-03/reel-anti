@@ -40,6 +40,8 @@ interface Turn {
   results?: OpResult[];
   snapshot?: ProjectJSON;
   reverted?: boolean;
+  /** Preview of an image this turn generated (data URL), shown inline in chat. */
+  imageUrl?: string;
 }
 
 const SUGGESTIONS = ["Smooth zoom", "Blur background", "Add transition", "Add captions"];
@@ -162,7 +164,7 @@ export default function AgentPanel({ onApplied }: { onApplied?: (info: AppliedIn
       const results = await applyOps(editor, [{ op: "addMedia", mediaType: "image", src, start: at, end: at + 4, name }], videoResolution);
       addAsset({ name, src, type: "image", origin: "generated" });
       onApplied?.({ affectedIds: results.flatMap((r) => r.affected ?? []), seekTo: at });
-      updateTurn(id, { text: `Generated an image and added it to the timeline at ${at}s. (Also saved to Assets → Your media.)` });
+      updateTurn(id, { text: `Generated an image and added it to the timeline at ${at}s. (Also saved to Assets → Your media.)`, imageUrl: src });
     } catch (err) {
       updateTurn(id, { role: "error", text: `Image generation failed: ${err instanceof Error ? err.message : String(err)}` });
     }
@@ -340,7 +342,16 @@ function TurnView({ turn, onAdd, onRevert }: { turn: Turn; onAdd: () => void; on
   const ops = turn.plan?.ops ?? [];
   return (
     <div className="msg-ai fade-in">
-      <div style={{ marginBottom: ops.length ? 10 : 0 }}>{reveal}</div>
+      <div style={{ marginBottom: ops.length || turn.imageUrl ? 10 : 0 }}>{reveal}</div>
+
+      {turn.imageUrl && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={turn.imageUrl}
+          alt="Generated image"
+          style={{ width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: 10, border: "1px solid var(--border)", marginBottom: 10, display: "block" }}
+        />
+      )}
 
       {ops.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginBottom: 12 }}>
