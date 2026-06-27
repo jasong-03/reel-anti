@@ -6,6 +6,7 @@ import { useLivePlayerContext } from "@twick/live-player";
 import { applyOps } from "@/lib/twick/apply-op";
 import type { Op } from "@/lib/twick/ops";
 import type { AppliedInfo } from "./agent-panel";
+import { useMediaLibrary } from "./media-library";
 import { Wand, Film, Image as ImageIcon } from "./icons";
 
 type Kind = "image" | "video";
@@ -37,6 +38,7 @@ const ASPECTS = ["16:9", "9:16", "1:1"] as const;
 export default function GeneratePanel({ onApplied }: { onApplied?: (i: AppliedInfo) => void }) {
   const { editor, videoResolution } = useTimelineContext();
   const { currentTime } = useLivePlayerContext();
+  const { addAsset } = useMediaLibrary();
 
   const [prompt, setPrompt] = useState("");
   const [kind, setKind] = useState<Kind>("image");
@@ -77,16 +79,17 @@ export default function GeneratePanel({ onApplied }: { onApplied?: (i: AppliedIn
   const generating = jobs.some((j) => j.status === "pending");
 
   const place = useCallback(
-    async (src: string, k: Kind) => {
+    async (src: string, k: Kind, name?: string) => {
       const at = Math.round(currentTime * 10) / 10;
       const op: Op =
         k === "image"
-          ? { op: "addMedia", mediaType: "image", src, start: at, end: at + 4 }
-          : { op: "addMedia", mediaType: "video", src, start: at };
+          ? { op: "addMedia", mediaType: "image", src, start: at, end: at + 4, ...(name ? { name } : {}) }
+          : { op: "addMedia", mediaType: "video", src, start: at, ...(name ? { name } : {}) };
       const results = await applyOps(editor, [op], videoResolution);
+      if (name) addAsset({ name, src, type: k, origin: "generated" });
       onApplied?.({ affectedIds: results.flatMap((r) => r.affected ?? []), seekTo: at });
     },
-    [editor, videoResolution, currentTime, onApplied]
+    [editor, videoResolution, currentTime, onApplied, addAsset]
   );
 
   const setJob = useCallback((id: string, patch: Partial<UiJob>) => {
@@ -94,7 +97,7 @@ export default function GeneratePanel({ onApplied }: { onApplied?: (i: AppliedIn
   }, []);
 
   const poll = useCallback(
-    (id: string, k: Kind) => {
+    (id: string, k: Kind, name?: string) => {
       const tick = async () => {
         try {
           const res = await fetch(`/api/media/job/${id}`);
@@ -107,7 +110,7 @@ export default function GeneratePanel({ onApplied }: { onApplied?: (i: AppliedIn
           }
           if (job.status === "done" && job.resultUrls?.[0]) {
             setJob(id, { status: "done", url: job.resultUrls[0] });
-            await place(job.resultUrls[0], k);
+            await place(job.resultUrls[0], k, name);
             return;
           }
           if (job.status === "error") {
@@ -149,11 +152,11 @@ export default function GeneratePanel({ onApplied }: { onApplied?: (i: AppliedIn
       // Images often come back done on the first response; otherwise poll.
       if (job.status === "done" && job.resultUrls?.[0]) {
         setJob(job.id, { status: "done", url: job.resultUrls[0] });
-        await place(job.resultUrls[0], kind);
+        await place(job.resultUrls[0], kind, p);
       } else if (job.status === "error") {
         setJob(job.id, { status: "error", error: job.error });
       } else {
-        poll(job.id, kind);
+        poll(job.id, kind, p);
       }
     } catch (e) {
       setConfigError(e instanceof Error ? e.message : "generation failed");
@@ -245,7 +248,7 @@ export default function GeneratePanel({ onApplied }: { onApplied?: (i: AppliedIn
         {jobs.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Recent</div>
-            {jobs.map((j) => <JobCard key={j.id} job={j} onReAdd={() => j.url && void place(j.url, j.kind)} />)}
+            {jobs.map((j) => <JobCard key={j.id} job={j} onReAdd={() => j.url && void place(j.url, j.kind, j.prompt)} />)}
           </div>
         )}
       </div>

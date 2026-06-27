@@ -35,6 +35,8 @@ export const addMediaOp = z.object({
   start: seconds,
   /** Optional for video/audio: defaults to natural media duration when omitted. */
   end: seconds.optional(),
+  /** Friendly clip name shown on the timeline (e.g. filename); defaults to the type. */
+  name: z.string().max(120).optional(),
 }).strict();
 
 export const trimOp = z.object({

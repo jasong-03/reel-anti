@@ -89,7 +89,8 @@ const placeJobResult = (job: GenJob, args: Record<string, unknown>, ctx: ToolCon
   const mediaType = job.kind === "video" ? "video" : "image";
   const start = typeof args.start === "number" ? args.start : 0;
   const end = typeof args.end === "number" ? args.end : undefined;
-  const placed = appendMediaElement(ctx.project, { mediaType, src, start, ...(end !== undefined ? { end } : {}) });
+  const name = job.prompt ? job.prompt.slice(0, 60) : undefined;
+  const placed = appendMediaElement(ctx.project, { mediaType, src, start, ...(end !== undefined ? { end } : {}), ...(name ? { name } : {}) });
 
   const health = healthCheck(placed.project);
   if (!health.ok) return err(`placing the generated ${mediaType} corrupted the timeline:\n- ${health.issues.join("\n- ")}`);
@@ -153,6 +154,7 @@ const placeMediaHeadless = (args: Record<string, unknown>, ctx: ToolContext): To
     src: op.src,
     start: op.start,
     ...(op.end !== undefined ? { end: op.end } : {}),
+    ...(op.name ? { name: op.name } : {}),
   });
   const health = healthCheck(placed.project);
   if (!health.ok) return err(`adding ${op.mediaType} corrupted the timeline:\n- ${health.issues.join("\n- ")}`);

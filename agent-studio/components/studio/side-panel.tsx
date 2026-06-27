@@ -8,7 +8,20 @@ import { applyOps } from "@/lib/twick/apply-op";
 import type { Op } from "@/lib/twick/ops";
 import type { NavId } from "./left-nav";
 import type { AppliedInfo } from "./agent-panel";
-import { TypeIcon, Shapes, Music, Layers, Effects, Template, Transitions, Upload, Film } from "./icons";
+import { useMediaLibrary, type AssetType, type AssetOrigin, type MediaAsset } from "./media-library";
+import { TypeIcon, Shapes, Music, Layers, Effects, Template, Transitions, Upload, Film, Image as ImageIcon, Plus, Trash } from "./icons";
+
+/** Best-effort human filename from a URL (skips query, decodes). */
+const fileNameFromUrl = (u: string): string => {
+  try {
+    const last = new URL(u).pathname.split("/").filter(Boolean).pop();
+    if (last) return decodeURIComponent(last);
+  } catch {
+    const last = u.split("/").filter(Boolean).pop();
+    if (last) return last;
+  }
+  return "media";
+};
 
 const SAMPLE_VIDEOS = [
   { label: "Big Buck Bunny", url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" },
@@ -63,6 +76,7 @@ function Tile({ label, onClick, accent }: { label: string; onClick: () => void; 
 export default function SidePanel({ nav, onApplied }: { nav: NavId; onApplied?: (i: AppliedInfo) => void }) {
   const { editor, videoResolution, selectedItem } = useTimelineContext();
   const { currentTime } = useLivePlayerContext();
+  const { assets, addAsset, removeAsset } = useMediaLibrary();
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const meta = TITLES[nav];
@@ -83,20 +97,28 @@ export default function SidePanel({ nav, onApplied }: { nav: NavId; onApplied?: 
   const selId = (selectedItem as { getId?: () => string } | null)?.getId?.();
   const selType = (selectedItem as { getType?: () => string } | null)?.getType?.();
 
-  // Import local files: blob object URLs are same-origin, so preview + WebCodecs
+  // Register media in the library AND drop it on the timeline at the playhead, with
+  // a friendly clip name. Blob object URLs are same-origin, so preview + WebCodecs
   // export read them without any CORS issue.
-  const addFiles = useCallback((files: File[]) => {
-    const ops: Op[] = [];
-    files.forEach((f, i) => {
-      const url = URL.createObjectURL(f);
-      const kind = f.type.startsWith("video") ? "video" : f.type.startsWith("audio") ? "audio" : "image";
-      const start = at + (kind === "audio" ? 0 : i * 0.01);
-      ops.push(kind === "image"
-        ? { op: "addMedia", mediaType: "image", src: url, start, end: start + 4 }
-        : { op: "addMedia", mediaType: kind, src: url, start });
+  const addMedia = useCallback((items: { src: string; type: AssetType; name: string; origin: AssetOrigin }[]) => {
+    const ops: Op[] = items.map((it, i) => {
+      addAsset({ name: it.name, src: it.src, type: it.type, origin: it.origin });
+      const start = at + (it.type === "audio" ? 0 : i * 0.01);
+      return it.type === "image"
+        ? { op: "addMedia", mediaType: "image", src: it.src, start, end: start + 4, name: it.name }
+        : { op: "addMedia", mediaType: it.type, src: it.src, start, name: it.name };
     });
     if (ops.length) void run(ops);
-  }, [at, run]);
+  }, [at, run, addAsset]);
+
+  const addFiles = useCallback((files: File[]) => {
+    addMedia(files.map((f) => ({
+      src: URL.createObjectURL(f),
+      type: (f.type.startsWith("video") ? "video" : f.type.startsWith("audio") ? "audio" : "image") as AssetType,
+      name: f.name,
+      origin: "upload" as AssetOrigin,
+    })));
+  }, [addMedia]);
 
   const pickFiles = useCallback((accept: string) => {
     const input = document.createElement("input");
@@ -130,9 +152,10 @@ export default function SidePanel({ nav, onApplied }: { nav: NavId; onApplied?: 
         return (
           <>
             <Dropzone label="Drop audio here or click to upload" accept="audio/*" busy={busy} onPick={() => pickFiles("audio/*")} onFiles={addFiles} />
-            <UrlAdd kind="audio" url={url} setUrl={setUrl} busy={busy} onAdd={(u) => run([{ op: "addMedia", mediaType: "audio", src: u, start: at }])} />
+            <UrlAdd kind="audio" url={url} setUrl={setUrl} busy={busy} onAdd={(u) => addMedia([{ src: u, type: "audio", name: fileNameFromUrl(u), origin: "url" }])} />
+            <MediaBin assets={assets.filter((a) => a.type === "audio")} onAdd={(a) => addMedia([{ src: a.src, type: a.type, name: a.name, origin: a.origin }])} onRemove={removeAsset} />
             <Section title="Samples">
-              {SAMPLE_AUDIO.map((s) => <Tile key={s.url} label={s.label} accent="var(--track-audio)" onClick={() => run([{ op: "addMedia", mediaType: "audio", src: s.url, start: at }])} />)}
+              {SAMPLE_AUDIO.map((s) => <Tile key={s.url} label={s.label} accent="var(--track-audio)" onClick={() => addMedia([{ src: s.url, type: "audio", name: s.label, origin: "sample" }])} />)}
             </Section>
           </>
         );
@@ -140,12 +163,13 @@ export default function SidePanel({ nav, onApplied }: { nav: NavId; onApplied?: 
         return (
           <>
             <Dropzone label="Drop video / image here or click to upload" accept="video/*,image/*" busy={busy} onPick={() => pickFiles("video/*,image/*")} onFiles={addFiles} />
-            <UrlAdd kind="media" url={url} setUrl={setUrl} busy={busy} onAdd={(u) => run([{ op: "addMedia", mediaType: mediaKind(u) === "audio" ? "video" : mediaKind(u), src: u, start: at }])} />
+            <UrlAdd kind="media" url={url} setUrl={setUrl} busy={busy} onAdd={(u) => { const t = (mediaKind(u) === "audio" ? "video" : mediaKind(u)) as AssetType; addMedia([{ src: u, type: t, name: fileNameFromUrl(u), origin: "url" }]); }} />
+            <MediaBin assets={assets.filter((a) => a.type !== "audio")} onAdd={(a) => addMedia([{ src: a.src, type: a.type, name: a.name, origin: a.origin }])} onRemove={removeAsset} />
             <Section title="Sample video">
-              {SAMPLE_VIDEOS.map((s) => <Tile key={s.url} label={s.label} accent="var(--track-video)" onClick={() => run([{ op: "addMedia", mediaType: "video", src: s.url, start: at }])} />)}
+              {SAMPLE_VIDEOS.map((s) => <Tile key={s.url} label={s.label} accent="var(--track-video)" onClick={() => addMedia([{ src: s.url, type: "video", name: s.label, origin: "sample" }])} />)}
             </Section>
             <Section title="Sample images">
-              {SAMPLE_IMAGES.map((s) => <Tile key={s.url} label={s.label} accent="var(--track-video)" onClick={() => run([{ op: "addMedia", mediaType: "image", src: s.url, start: at, end: at + 4 }])} />)}
+              {SAMPLE_IMAGES.map((s) => <Tile key={s.url} label={s.label} accent="var(--track-video)" onClick={() => addMedia([{ src: s.url, type: "image", name: s.label, origin: "sample" }])} />)}
             </Section>
           </>
         );
@@ -234,6 +258,31 @@ function UrlAdd({ kind, url, setUrl, busy, onAdd }: { kind: string; url: string;
       <button className="btn btn-primary" disabled={busy || !url.trim()} onClick={() => { onAdd(url.trim()); setUrl(""); }} style={{ height: 36, opacity: busy || !url.trim() ? 0.5 : 1 }}>
         {busy ? "Adding…" : "Add to timeline"}
       </button>
+    </Section>
+  );
+}
+
+/** The media library ("asset bin") — everything imported or generated, re-addable. */
+function MediaBin({ assets, onAdd, onRemove }: { assets: MediaAsset[]; onAdd: (a: MediaAsset) => void; onRemove: (id: string) => void }) {
+  if (assets.length === 0) return null;
+  return (
+    <Section title={`Your media (${assets.length})`}>
+      {assets.map((a) => (
+        <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: 8, borderRadius: 10, background: "var(--surface-1)", border: "1px solid var(--border)" }}>
+          <div style={{ width: 40, height: 40, flexShrink: 0, borderRadius: 7, overflow: "hidden", background: "var(--surface-2)", display: "grid", placeItems: "center", color: "var(--text-3)" }}>
+            {a.type === "image" ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={a.src} alt={a.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            ) : a.type === "audio" ? <Music width={17} /> : <Film width={17} />}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12.5, color: "var(--text-1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.name}</div>
+            <div style={{ fontSize: 10.5, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{a.type} · {a.origin}</div>
+          </div>
+          <button className="icon-btn" aria-label={`Add ${a.name} to timeline`} title="Add to timeline" onClick={() => onAdd(a)}><Plus width={16} /></button>
+          <button className="icon-btn" aria-label={`Remove ${a.name} from library`} title="Remove from library" onClick={() => onRemove(a.id)}><Trash width={15} /></button>
+        </div>
+      ))}
     </Section>
   );
 }

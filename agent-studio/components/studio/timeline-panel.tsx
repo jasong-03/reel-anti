@@ -32,8 +32,15 @@ const clipLabel = (el: ElementJSON): string => {
   const props = (el.props ?? {}) as Record<string, unknown>;
   const text = (el.t as string) ?? (props.text as string);
   if (typeof text === "string" && text.trim()) return text.trim();
+  // Friendly media name (filename / sample / prompt) set when the clip was added.
+  const name = (el.name ?? "").trim();
+  if (name && name !== el.type) return name;
+  // Fall back to the source filename — but NEVER a blob: URL (its path is a UUID).
   const src = props.src as string | undefined;
-  if (src) return src.split("/").pop() ?? src;
+  if (src && !src.startsWith("blob:") && !src.startsWith("data:")) {
+    const file = src.split("/").filter(Boolean).pop();
+    if (file) return file;
+  }
   return el.type;
 };
 

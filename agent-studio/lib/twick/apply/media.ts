@@ -20,6 +20,8 @@ export const applyAddMedia = async (
   else el = new AudioElement(op.src);
 
   el.setStart(op.start);
+  // Friendly clip name (filename / sample / prompt) so the timeline isn't a UUID.
+  if (op.name) el.setName(op.name);
   // Leave end unset (NaN) when omitted so Twick fills the natural media duration.
   if (op.end !== undefined) {
     if (op.end <= op.start) return fail(op.op, "end must be greater than start");

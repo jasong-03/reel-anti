@@ -15,6 +15,8 @@ export interface MediaSpec {
   src: string;
   start: number;
   end?: number;
+  /** Friendly clip name shown on the timeline; defaults to the media type. */
+  name?: string;
 }
 
 const trackTypeFor = (mediaType: MediaSpec["mediaType"]): string =>
@@ -49,7 +51,7 @@ export const appendMediaElement = (
   const element = {
     id,
     trackId: track.id,
-    name: spec.mediaType,
+    name: spec.name ?? spec.mediaType,
     type: spec.mediaType,
     s: spec.start,
     e: end,

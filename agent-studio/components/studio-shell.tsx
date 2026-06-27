@@ -8,6 +8,7 @@ import LeftNav, { type NavId, type PanelId } from "./studio/left-nav";
 import AgentPanel, { type AppliedInfo } from "./studio/agent-panel";
 import SidePanel from "./studio/side-panel";
 import GeneratePanel from "./studio/generate-panel";
+import { MediaLibraryProvider } from "./studio/media-library";
 import { SettingsPanel, FeedbackPanel } from "./studio/meta-panels";
 import CenterWorkspace from "./studio/center-workspace";
 import PropertiesPanel from "./studio/properties-panel";
@@ -103,7 +104,9 @@ export default function StudioShell() {
   return (
     <LivePlayerProvider>
       <TimelineProvider contextId="ai-video-studio" initialData={INITIAL_PROJECT} resolution={RESOLUTION} analytics={{ enabled: false }}>
-        <StudioLayout />
+        <MediaLibraryProvider>
+          <StudioLayout />
+        </MediaLibraryProvider>
       </TimelineProvider>
     </LivePlayerProvider>
   );

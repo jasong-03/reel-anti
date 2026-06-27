@@ -6,6 +6,7 @@ import { useLivePlayerContext } from "@twick/live-player";
 import type { ProjectJSON } from "@twick/timeline";
 import { applyOps, type OpResult } from "@/lib/twick/apply-op";
 import type { Op } from "@/lib/twick/ops";
+import { useMediaLibrary } from "./media-library";
 import {
   Sparkles,
   Send,
@@ -91,6 +92,7 @@ function useReveal(text: string, on: boolean): string {
 export default function AgentPanel({ onApplied }: { onApplied?: (info: AppliedInfo) => void }) {
   const { editor, videoResolution } = useTimelineContext();
   const { currentTime } = useLivePlayerContext();
+  const { addAsset } = useMediaLibrary();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -170,9 +172,10 @@ export default function AgentPanel({ onApplied }: { onApplied?: (info: AppliedIn
       const ops: Op[] = files.map((f) => {
         const url = URL.createObjectURL(f);
         const kind = f.type.startsWith("video") ? "video" : f.type.startsWith("audio") ? "audio" : "image";
+        addAsset({ name: f.name, src: url, type: kind, origin: "upload" });
         return kind === "image"
-          ? { op: "addMedia", mediaType: "image", src: url, start: currentTime, end: currentTime + 4 }
-          : { op: "addMedia", mediaType: kind, src: url, start: currentTime };
+          ? { op: "addMedia", mediaType: "image", src: url, start: currentTime, end: currentTime + 4, name: f.name }
+          : { op: "addMedia", mediaType: kind, src: url, start: currentTime, name: f.name };
       });
       if (!ops.length) return;
       const results = await applyOps(editor, ops, videoResolution);
@@ -180,7 +183,7 @@ export default function AgentPanel({ onApplied }: { onApplied?: (info: AppliedIn
       push({ role: "ai", text: `Imported ${files.length} file(s) to the timeline.` });
     };
     fi.click();
-  }, [editor, videoResolution, currentTime, onApplied, push]);
+  }, [editor, videoResolution, currentTime, onApplied, push, addAsset]);
 
   // Voice: Web Speech API → fill the prompt.
   const toggleVoice = useCallback(() => {
