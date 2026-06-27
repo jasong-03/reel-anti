@@ -11,7 +11,7 @@ import { OP_NAMES } from "../twick/ops";
  * in-app agent uses, so the two front-ends can never drift.
  */
 
-export type ToolKind = "read" | "op";
+export type ToolKind = "read" | "op" | "media";
 
 export interface JsonSchema {
   type: "object";
@@ -138,7 +138,35 @@ export const OP_TOOLS: ToolDef[] = OP_NAMES.map((name) => ({
   inputSchema: OP_SCHEMAS[name].schema,
 }));
 
-export const ALL_TOOLS: ToolDef[] = [...READ_TOOLS, ...OP_TOOLS];
+/** Generative-media tools (W4). On completion they emit the existing addMedia op. */
+export const MEDIA_TOOLS: ToolDef[] = [
+  {
+    name: "generate_image",
+    kind: "media",
+    description:
+      "Generate a still image from a text prompt and place it on the timeline (via addMedia). Synchronous — returns once the image is on the timeline. Costs money; not undoable as a generation. Defaults to a 4s clip at the given start.",
+    inputSchema: obj(
+      { prompt: str, model: str, aspectRatio: str, start: num, end: num },
+      ["prompt"]
+    ),
+  },
+  {
+    name: "generate_video",
+    kind: "media",
+    description:
+      "Start generating a video from a text prompt. Async and slow — returns a jobId; poll with check_media_job until done, which then places it on the timeline. Costs money. Tip: generate a still first and confirm before animating it.",
+    inputSchema: obj({ prompt: str, model: str, aspectRatio: str }, ["prompt"]),
+  },
+  {
+    name: "check_media_job",
+    kind: "media",
+    description:
+      "Poll a generation job by id. When done, places the result on the timeline (via addMedia) at the given start; otherwise reports it's still pending.",
+    inputSchema: obj({ jobId: str, start: num, end: num }, ["jobId"]),
+  },
+];
+
+export const ALL_TOOLS: ToolDef[] = [...READ_TOOLS, ...OP_TOOLS, ...MEDIA_TOOLS];
 
 const BY_NAME = new Map(ALL_TOOLS.map((t) => [t.name, t]));
 export const getToolDef = (name: string): ToolDef | undefined => BY_NAME.get(name);

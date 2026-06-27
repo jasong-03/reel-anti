@@ -3,7 +3,9 @@ import { parseOp } from "../twick/ops";
 import { serializeForAgent } from "../twick/serialize";
 import { executeOps } from "../twick/apply";
 import { makeNodeEditor, healthCheck } from "../twick/headless";
+import { appendMediaElement } from "../twick/apply/media-json";
 import { getToolDef } from "./tool-registry";
+import { getMediaProvider, getJob, type GenJob, type MediaKind } from "./media-gen";
 
 /**
  * The shared tool executor — the single place a tool call becomes a timeline
@@ -43,6 +45,61 @@ const resolutionFor = (ctx: ToolContext): { width: number; height: number } => {
 
 const err = (content: string): ToolCallResult => ({ content, isError: true });
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Apply a single fully-formed op object to the project (validate → atomic apply →
+ * health). Shared by the op tools and the media tools (which build an addMedia op
+ * once generation completes).
+ */
+const applyRawOp = async (
+  rawOp: Record<string, unknown>,
+  project: ProjectJSON,
+  resolution: { width: number; height: number }
+): Promise<ToolCallResult> => {
+  const parsed = parseOp(rawOp);
+  if (!parsed.ok) return err(`invalid arguments for "${rawOp.op}":\n${parsed.error}`);
+
+  const editor = makeNodeEditor(project);
+  const batch = await executeOps(editor, [parsed.op], resolution);
+  if (!batch.ok) return err(batch.error ?? `"${rawOp.op}" failed`);
+
+  const next = editor.getProject();
+  const health = healthCheck(next);
+  if (!health.ok) {
+    return err(`"${rawOp.op}" produced a corrupted timeline (not applied):\n- ${health.issues.join("\n- ")}`);
+  }
+  const result = batch.results[0];
+  const changed = batch.changed.length ? ` Changed ids: ${batch.changed.join(", ")}.` : "";
+  return {
+    content: `${result.message}.${changed} Trust these ids — do not re-read the timeline before your next edit.`,
+    isError: false,
+    project: next,
+  };
+};
+
+/**
+ * Place a finished generation job's result on the timeline. The headless executor
+ * appends the ElementJSON directly (Twick's addMedia decodes media and only works
+ * in the browser); the result is the same JSON the browser renders on load.
+ */
+const placeJobResult = (job: GenJob, args: Record<string, unknown>, ctx: ToolContext): ToolCallResult => {
+  const src = job.resultUrls?.[0];
+  if (!src) return err(`job ${job.id} is done but produced no result URL`);
+  const mediaType = job.kind === "video" ? "video" : "image";
+  const start = typeof args.start === "number" ? args.start : 0;
+  const end = typeof args.end === "number" ? args.end : undefined;
+  const placed = appendMediaElement(ctx.project, { mediaType, src, start, ...(end !== undefined ? { end } : {}) });
+
+  const health = healthCheck(placed.project);
+  if (!health.ok) return err(`placing the generated ${mediaType} corrupted the timeline:\n- ${health.issues.join("\n- ")}`);
+  return {
+    content: `Generated ${mediaType} placed on the timeline (id ${placed.elementId}, from ${start}s). Trust this id.`,
+    isError: false,
+    project: placed.project,
+  };
+};
+
 export const executeTool = async (
   name: string,
   args: Record<string, unknown>,
@@ -72,32 +129,66 @@ export const executeTool = async (
     return err(`read tool "${name}" has no handler`);
   }
 
+  if (def.kind === "media") return executeMediaTool(name, args, ctx);
+
   // Op tool: reconstruct the discriminated op and run it through the same Zod +
   // apply path the in-app agent uses, so the two front-ends can never diverge.
-  const parsed = parseOp({ op: name, ...args });
-  if (!parsed.ok) {
-    return err(`invalid arguments for "${name}":\n${parsed.error}`);
+  return applyRawOp({ op: name, ...args }, ctx.project, resolution);
+};
+
+/**
+ * Generative-media tools. generate_image completes inline (Imagen is sync; the
+ * stub resolves in one poll) and drops the still on the timeline. generate_video
+ * is async — it returns a jobId the caller polls via check_media_job, which places
+ * the result once Veo finishes.
+ */
+const executeMediaTool = async (
+  name: string,
+  args: Record<string, unknown>,
+  ctx: ToolContext
+): Promise<ToolCallResult> => {
+  let provider: ReturnType<typeof getMediaProvider>;
+  try {
+    provider = getMediaProvider();
+  } catch (e) {
+    return err(e instanceof Error ? e.message : "media generation is not configured");
   }
 
-  const editor = makeNodeEditor(ctx.project);
-  const batch = await executeOps(editor, [parsed.op], resolution);
-  if (!batch.ok) {
-    return err(batch.error ?? `"${name}" failed`);
+  if (name === "check_media_job") {
+    const jobId = typeof args.jobId === "string" ? args.jobId : "";
+    if (!getJob(jobId)) return err(`unknown jobId "${jobId}"`);
+    const job = await provider.poll(jobId);
+    if (job.status === "error") return err(`generation failed: ${job.error}`);
+    if (job.status === "pending") return { content: `job ${jobId} is still generating — poll again shortly`, isError: false };
+    return placeJobResult(job, args, ctx);
   }
 
-  const project = editor.getProject();
-  const health = healthCheck(project);
-  if (!health.ok) {
-    // Defense in depth: a mutation that passed apply but corrupted the timeline is
-    // a bug, not the agent's fault — surface it as an error and don't persist.
-    return err(`"${name}" produced a corrupted timeline (not applied):\n- ${health.issues.join("\n- ")}`);
-  }
-
-  const result = batch.results[0];
-  const changed = batch.changed.length ? ` Changed ids: ${batch.changed.join(", ")}.` : "";
-  return {
-    content: `${result.message}.${changed} Trust these ids — do not re-read the timeline before your next edit.`,
-    isError: false,
-    project,
+  const prompt = typeof args.prompt === "string" ? args.prompt : "";
+  if (!prompt) return err(`"${name}" requires a non-empty prompt`);
+  const kind: MediaKind = name === "generate_video" ? "video" : "image";
+  const req = {
+    kind,
+    prompt,
+    ...(typeof args.model === "string" ? { model: args.model } : {}),
+    ...(typeof args.aspectRatio === "string" ? { aspectRatio: args.aspectRatio } : {}),
   };
+
+  let job = await provider.submit(req);
+  if (job.status === "error") return err(`generation failed: ${job.error}`);
+
+  if (kind === "video") {
+    return {
+      content: `Started video generation (job ${job.id}). It's slow — call check_media_job with this jobId until it's done; that will place it on the timeline.`,
+      isError: false,
+    };
+  }
+
+  // Image: poll to completion inline (fast). Bounded so a stuck provider can't hang.
+  for (let i = 0; i < 8 && job.status === "pending"; i++) {
+    await sleep(400);
+    job = await provider.poll(job.id);
+  }
+  if (job.status === "error") return err(`generation failed: ${job.error}`);
+  if (job.status !== "done") return { content: `image job ${job.id} did not finish in time — poll check_media_job`, isError: false };
+  return placeJobResult(job, args, ctx);
 };

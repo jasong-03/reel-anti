@@ -65,10 +65,26 @@ MCP_TOKEN=$(openssl rand -hex 24) pnpm dev      # enable the endpoint
 ```
 
 Point a client at `http://localhost:3000/api/mcp?project=default` with that bearer token. Tools:
-`get_timeline`, `check_timeline_health`, and one per op (`addText`, `addShape`, `trim`, …). Edits
-persist to the shared `.data/projects/<id>.json` store, so the browser and the external agent edit
-the same project. Tool failures come back as `isError` + an actionable message (errors-as-data), not
-exceptions. Offline-verify the protocol and executor with `pnpm test:mcp`.
+`get_timeline`, `check_timeline_health`, one per op (`addText`, `addShape`, `trim`, …), and the
+generative tools (`generate_image`, `generate_video`, `check_media_job`). Edits persist to the shared
+`.data/projects/<id>.json` store, so the browser and the external agent edit the same project. Tool
+failures come back as `isError` + an actionable message (errors-as-data), not exceptions. Offline-verify
+the protocol and executor with `pnpm test:mcp`.
+
+## Generative media (W4)
+
+A provider seam (`lib/agent/media-gen.ts`, sibling to `llm.ts`) generates stills and video and drops
+them on the timeline:
+
+- **Gemini** (Imagen for images, Veo for video) — set `GEMINI_API_KEY`.
+- **Stub** — `MEDIA_GEN_PROVIDER=stub` returns a real placeholder image so the whole submit → poll →
+  place flow is exercised offline (`pnpm test:media`), no credits spent.
+
+Routes `POST /api/media/generate`, `GET /api/media/job/[id]`, `GET /api/media/models` drive the
+browser UI (which places media via the real `addMedia` op). The MCP/headless executor appends the
+equivalent `ElementJSON` directly, since Twick's media decode is browser-only. Images return inline;
+video is async (poll `check_media_job`). Deferred: the side-panel Generate UI, `import_media` byte
+caching for short-lived Veo URLs, and live transcription.
 
 ## Tests
 
@@ -77,6 +93,7 @@ pnpm test:offline   # deterministic: serialize / validate / health        (no ke
 pnpm test:apply     # real headless TimelineEditor apply + undo            (no key)
 pnpm test:mcp       # executeOps atomic rollback + MCP JSON-RPC dispatch   (no key)
 pnpm test:transcript # word-cut planner + removeWords end-to-end           (no key)
+pnpm test:media     # media provider/job-store + generate→place flow (stub) (no key)
 pnpm test:smoke     # 3 real agent turns → atomic apply → health          (needs key)
 pnpm test:gates     # full live battery (Phases 1–3)                       (needs key)
 ```
