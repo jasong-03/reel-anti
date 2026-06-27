@@ -6,7 +6,7 @@ import {
   AudioElement,
 } from "@twick/timeline";
 import type { Op } from "../ops";
-import { addToSuitableTrack, fail, ok, type OpResult, type Resolution } from "./base";
+import { addToSuitableTrack, addToOverlayTrack, fail, ok, type OpResult, type Resolution } from "./base";
 
 export const applyAddMedia = async (
   editor: TimelineEditor,
@@ -28,6 +28,10 @@ export const applyAddMedia = async (
     el.setEnd(op.end);
   }
 
-  const trackId = await addToSuitableTrack(editor, el, op.mediaType, op.start, op.end ?? null);
+  // Images are overlays → put them on an ELEMENT track above the video (renders on
+  // top, as an image). Video/audio keep their normal track placement.
+  const trackId = op.mediaType === "image"
+    ? await addToOverlayTrack(editor, el, op.start, op.end ?? null)
+    : await addToSuitableTrack(editor, el, op.mediaType, op.start, op.end ?? null);
   return ok(op.op, `Added ${op.mediaType} from ${op.src}`, [el.getId(), trackId]);
 };

@@ -56,9 +56,45 @@ const collidesOnTrack = (track: Track, start: number, end: number): boolean =>
   track.getElements().some((e) => e.getStart() < end && e.getEnd() > start);
 
 export const trackTypeFor = (elementType: string): string => {
-  if (elementType === "video" || elementType === "image") return TRACK_TYPES.VIDEO;
+  if (elementType === "video") return TRACK_TYPES.VIDEO;
   if (elementType === "audio") return TRACK_TYPES.AUDIO;
+  // image (+ text/shapes) MUST go on an ELEMENT track: the visualizer's video-track
+  // renderer treats every element as a video, so an image on a video track is loaded
+  // as a video and fails (MEDIA_ERR_SRC_NOT_SUPPORTED). ELEMENT tracks render per type.
   return TRACK_TYPES.ELEMENT;
+};
+
+/**
+ * Place an image/overlay element on an ELEMENT track that sits ABOVE all video
+ * tracks, so it renders ON TOP (last track = front). Reuses a non-colliding
+ * overlay track when one exists; otherwise appends a fresh "Overlay" track.
+ */
+export const addToOverlayTrack = async (
+  editor: TimelineEditor,
+  element: TrackElement,
+  start: number,
+  end: number | null
+): Promise<string> => {
+  const tracks = editor.getTimelineData()?.tracks ?? [];
+  let lastVideo = -1;
+  tracks.forEach((t, i) => { if (t.getType() === TRACK_TYPES.VIDEO) lastVideo = i; });
+
+  for (let i = tracks.length - 1; i > lastVideo; i--) {
+    const track = tracks[i];
+    if (track.getType() !== TRACK_TYPES.ELEMENT) continue;
+    if (end !== null && collidesOnTrack(track, start, end)) continue;
+    try {
+      if (await editor.addElementToTrack(track, element)) return track.getId();
+    } catch {
+      // try the next candidate
+    }
+  }
+
+  const fresh = editor.addTrack("Overlay", TRACK_TYPES.ELEMENT);
+  if (!(await editor.addElementToTrack(fresh, element))) {
+    throw new Error("overlay element could not be added to a new track");
+  }
+  return fresh.getId();
 };
 
 /**

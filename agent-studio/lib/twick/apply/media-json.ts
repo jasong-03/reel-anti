@@ -19,8 +19,10 @@ export interface MediaSpec {
   name?: string;
 }
 
+// audio → audio track; video → video track; image → ELEMENT track (the visualizer
+// renders every element on a video track AS a video, which fails for images).
 const trackTypeFor = (mediaType: MediaSpec["mediaType"]): string =>
-  mediaType === "audio" ? "audio" : "video";
+  mediaType === "audio" ? "audio" : mediaType === "video" ? "video" : "element";
 
 const overlaps = (track: TrackJSON, start: number, end: number): boolean =>
   (track.elements ?? []).some((e) => e.s < end && e.e > start);
@@ -36,11 +38,23 @@ export const appendMediaElement = (
   // end fall back to a 5s placeholder until the browser resolves real duration.
   const end = spec.end ?? spec.start + (spec.mediaType === "image" ? 4 : 5);
 
-  let track = next.tracks.find((t) => (t.type ?? "element") === trackType && !overlaps(t, spec.start, end));
+  // For an image overlay, only reuse an ELEMENT track that sits AFTER the last
+  // video track (so it renders on top); otherwise append a fresh "Overlay" track.
+  let track: TrackJSON | undefined;
+  if (spec.mediaType === "image") {
+    let lastVideo = -1;
+    next.tracks.forEach((t, i) => { if ((t.type ?? "element") === "video") lastVideo = i; });
+    for (let i = next.tracks.length - 1; i > lastVideo; i--) {
+      const t = next.tracks[i];
+      if ((t.type ?? "element") === "element" && !overlaps(t, spec.start, end)) { track = t; break; }
+    }
+  } else {
+    track = next.tracks.find((t) => (t.type ?? "element") === trackType && !overlaps(t, spec.start, end));
+  }
   if (!track) {
     track = {
       id: `t-${randomUUID()}`,
-      name: `${trackType.charAt(0).toUpperCase()}${trackType.slice(1)} Track`,
+      name: spec.mediaType === "image" ? "Overlay" : `${trackType.charAt(0).toUpperCase()}${trackType.slice(1)} Track`,
       type: trackType,
       elements: [],
     } as TrackJSON;
