@@ -19,12 +19,14 @@ AgentChatPanel┘   (shared `editor`)         → LLM tool-call (Gemini, swappab
    └─ applyOps(editor, ops)  → preview + undo update live
 ```
 
-- **`lib/twick/ops.ts`** — the 7-op Zod contract (`addText`, `addMedia`, `trim`, `move`, `split`, `remove`, `removeSpan`).
+- **`lib/twick/ops.ts`** — the 10-op Zod contract (`addText`, `addMedia`, `trim`, `move`, `split`, `remove`, `removeSpan`, `addShape`, `addCaption`, `addZoom`). Every op is `.strict()` — unknown fields are rejected with an actionable, JSON-path error the model self-corrects on.
 - **`lib/twick/serialize.ts`** — compact, index-annotated timeline view the model reads.
-- **`lib/twick/apply-op.ts`** — deterministic one-op-to-one-`TimelineEditor`-call map (client-side).
+- **`lib/twick/apply/`** — deterministic one-op-to-one-`TimelineEditor`-call map, split by domain (`text`/`media`/`clips`/`timeline`/`shapes`/`captions`/`motion`). `executeOps` applies a batch as **one transaction** (validate up-front, roll back the whole batch on any failure — never a half-edited timeline). `apply-op.ts` re-exports it for back-compat.
+- **`lib/twick/headless.ts`** — the `TimelineEditor` running headless, shared by tests and the server-side MCP executor.
 - **`lib/agent/llm.ts`** — provider-agnostic tool-calling seam; Gemini today, Claude drop-in.
 - **`lib/agent/run-agent.ts`** — serialize → prompt → tool-call → validate → retry-once.
-- **`app/api/agent/route.ts`** — the Route Handler.
+- **`lib/agent/{tool-registry,execute-tool,mcp-server,mcp-store}.ts`** — one tool executor behind two front-ends (in-app agent **and** the MCP server).
+- **`app/api/agent/route.ts`** / **`app/api/mcp/route.ts`** — the in-app and MCP Route Handlers.
 - **`components/`** — the studio shell and the chat panel.
 
 LLM calls happen only on the server. `applyOp` runs in the browser against the live `editor`, so the
@@ -50,6 +52,32 @@ GEMINI_API_KEY=... pnpm test:loop   # runs the canonical prompt 10× and checks 
 
 Gate passes when it reports `10/10`, multi-clip references resolve correctly, and undo (free via
 Twick) cleanly reverts.
+
+## MCP server — drive the timeline from Claude Code / Cursor / Codex
+
+The same tool executor the in-app agent uses is exposed over MCP (Streamable HTTP, JSON-RPC),
+so an external coding agent can read and edit the timeline. It's **disabled unless `MCP_TOKEN` is
+set** (safe by default), and gated by `Authorization: Bearer $MCP_TOKEN`.
+
+```bash
+MCP_TOKEN=$(openssl rand -hex 24) pnpm dev      # enable the endpoint
+```
+
+Point a client at `http://localhost:3000/api/mcp?project=default` with that bearer token. Tools:
+`get_timeline`, `check_timeline_health`, and one per op (`addText`, `addShape`, `trim`, …). Edits
+persist to the shared `.data/projects/<id>.json` store, so the browser and the external agent edit
+the same project. Tool failures come back as `isError` + an actionable message (errors-as-data), not
+exceptions. Offline-verify the protocol and executor with `pnpm test:mcp`.
+
+## Tests
+
+```bash
+pnpm test:offline   # deterministic: serialize / validate / health        (no key)
+pnpm test:apply     # real headless TimelineEditor apply + undo            (no key)
+pnpm test:mcp       # executeOps atomic rollback + MCP JSON-RPC dispatch   (no key)
+pnpm test:smoke     # 3 real agent turns → atomic apply → health          (needs key)
+pnpm test:gates     # full live battery (Phases 1–3)                       (needs key)
+```
 
 ## Swapping the LLM to Claude
 

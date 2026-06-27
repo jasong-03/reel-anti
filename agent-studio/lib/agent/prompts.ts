@@ -31,12 +31,32 @@ RULES:
 3. Only touch elements the user asked about. Do not reorganize, restyle, or delete anything else.
 4. If the request is ambiguous or impossible with the available ops, return an empty ops array and explain in reasoning.
 5. Order ops sensibly (e.g. removals before adds when indices could shift — but ids are stable, so prefer id-based ops).
-6. Keep reasoning to one or two sentences.`;
+6. Keep reasoning to one or two sentences.
+7. Use ONLY the fields listed for each op. Unknown fields are rejected, not ignored — if you need styling an op doesn't expose, leave it out.
+
+DOCTRINE:
+- The whole list you emit is applied as ONE transaction: if any op is invalid the entire batch is rejected and nothing changes, so every op must be correct against the CURRENT timeline shown above.
+- Operations report what they changed (created ids, new times). Within a single turn the timeline you were given is authoritative — do not assume an id you didn't see, and reference only ids present above.
+- A validation error is actionable data: it names the exact field and constraint. Fix that field; don't abandon the task or re-emit the same mistake.`;
+
+// Cap the per-caption word dump so a long transcript can't blow the context
+// budget. We surface the head and tail (the edges agents target most) and state
+// exactly how many were elided — never a silent truncation.
+const MAX_WORDS_SHOWN = 60;
 
 const fmtElement = (e: AgentTimelineView["elements"][number]): string => {
   const base = `  #${e.index} id=${e.id} ${e.type} [${e.start}s–${e.end}s] track=${e.trackType} "${e.label}"`;
   if (!e.words?.length) return base;
-  const words = e.words.map((w) => `${w.word}@${w.startMs}ms`).join(" ");
+  const fmt = (w: { word: string; startMs: number }) => `${w.word}@${w.startMs}ms`;
+  let words: string;
+  if (e.words.length <= MAX_WORDS_SHOWN) {
+    words = e.words.map(fmt).join(" ");
+  } else {
+    const half = Math.floor(MAX_WORDS_SHOWN / 2);
+    const head = e.words.slice(0, half).map(fmt).join(" ");
+    const tail = e.words.slice(-half).map(fmt).join(" ");
+    words = `${head} … (${e.words.length - MAX_WORDS_SHOWN} words elided) … ${tail}`;
+  }
   return `${base}\n      words: ${words}`;
 };
 

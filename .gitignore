@@ -1,5 +1,10 @@
 # Reference clone of Twick (not part of this project — `git clone https://github.com/ncounterspecialist/twick`)
-twick/
+# Leading slash anchors this to the repo root ONLY — an unanchored `twick/` also
+# matches our source dir `agent-studio/lib/twick/` and silently un-tracks it.
+/twick/
+
+# Reference clone of palmier-pro — GPL-3.0, studied for ideas only, MUST NOT be committed
+/palmier-ref/
 
 # deps & build
 node_modules/

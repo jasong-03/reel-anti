@@ -11,11 +11,14 @@
     "typecheck": "tsc --noEmit",
     "test:offline": "tsx scripts/offline-check.ts",
     "test:apply": "tsx scripts/apply-integration.ts",
+    "test:mcp": "tsx scripts/mcp-check.ts",
+    "test:smoke": "tsx scripts/live-smoke.ts",
     "test:loop": "tsx scripts/eval-loop.ts",
     "test:gates": "tsx scripts/gate-suite.ts"
   },
   "dependencies": {
     "@google/genai": "2.10.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@twick/browser-render": "0.15.31",
     "@twick/live-player": "0.15.31",
     "@twick/studio": "0.15.31",

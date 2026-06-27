@@ -18,6 +18,8 @@ export interface UsageEntry {
   destructiveCount: number;
   ok: boolean;
   error?: string;
+  /** Which front-end drove this turn: the in-app agent or the external MCP server. */
+  source?: "agent" | "mcp";
 }
 
 const LOG_DIR = path.join(process.cwd(), ".data");

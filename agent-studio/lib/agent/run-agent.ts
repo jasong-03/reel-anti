@@ -1,5 +1,5 @@
 import type { ProjectJSON } from "@twick/timeline";
-import { agentResponseSchema, type AgentResponse, type Op } from "../twick/ops";
+import { agentResponseSchema, formatIssues, type AgentResponse, type Op } from "../twick/ops";
 import { serializeForAgent, type AgentTimelineView } from "../twick/serialize";
 import { validateOps } from "../twick/validate-ops";
 import { getProvider } from "./llm";
@@ -23,13 +23,6 @@ export interface RunAgentOutput extends AgentResponse {
   tier: string;
 }
 
-const formatZodErrors = (
-  issues: { path: (string | number)[]; message: string }[]
-): string =>
-  issues
-    .map((i) => `- ${i.path.length ? i.path.join(".") : "(root)"}: ${i.message}`)
-    .join("\n");
-
 /**
  * Validate one model response through BOTH layers: Zod (shape) then semantic
  * (against live state). Returns the ops on success, or a human-readable error
@@ -41,7 +34,7 @@ const validateResponse = (
 ): { ok: true; data: AgentResponse; destructiveCount: number } | { ok: false; error: string } => {
   const parsed = agentResponseSchema.safeParse(object);
   if (!parsed.success) {
-    return { ok: false, error: formatZodErrors(parsed.error.issues) };
+    return { ok: false, error: formatIssues(parsed.error.issues) };
   }
   const semantic = validateOps(view, parsed.data.ops as Op[]);
   if (!semantic.ok) {
