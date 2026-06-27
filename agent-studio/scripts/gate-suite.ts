@@ -15,7 +15,9 @@ import { applyOps } from "../lib/twick/apply-op";
 import type { Op } from "../lib/twick/ops";
 import { makeNodeEditor, healthCheck, SEED_TITLES } from "./_harness";
 
-loadEnv({ path: ".env.local" });
+// Mirror Next.js precedence: .env is the base, .env.local overrides it.
+loadEnv({ path: ".env" });
+loadEnv({ path: ".env.local", override: true });
 
 const RES = { width: 720, height: 1280 };
 
@@ -122,8 +124,8 @@ async function gate3() {
 }
 
 async function main() {
-  if (!process.env.GEMINI_API_KEY) {
-    console.error("GEMINI_API_KEY is not set. Add it to agent-studio/.env.local, then re-run `pnpm test:gates`.");
+  if (!process.env.OPENROUTER_API_KEY && !process.env.GEMINI_API_KEY) {
+    console.error("No LLM key set. Add OPENROUTER_API_KEY (or GEMINI_API_KEY) to agent-studio/.env, then re-run `pnpm test:gates`.");
     process.exit(2);
   }
   console.log("Running live gate battery (Phases 1–3)…");

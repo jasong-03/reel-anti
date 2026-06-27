@@ -205,23 +205,105 @@ class GeminiMediaProvider implements MediaGenProvider {
   }
 }
 
+// ── OpenRouter provider (image only) ────────────────────────────────────────
+// Image generation via the OpenAI-compatible chat-completions API with
+// modalities:["image"] — the assistant message returns the image as a data URL
+// (choices[0].message.images[0].image_url.url). Reuses the SAME key as the LLM
+// agent, so generate_image works without a separate Google credential. Video is
+// not hosted on OpenRouter — Veo still needs Gemini/Vertex.
+const OPENROUTER_CATALOG: MediaModel[] = [
+  { id: "google/gemini-2.5-flash-image", kind: "image", label: "Gemini 2.5 Flash Image (Nano Banana)" },
+  { id: "google/gemini-3.1-flash-image", kind: "image", label: "Gemini 3.1 Flash Image" },
+  { id: "openai/gpt-5-image-mini", kind: "image", label: "GPT-5 Image Mini" },
+];
+
+class OpenRouterMediaProvider implements MediaGenProvider {
+  readonly name = "openrouter";
+  constructor(private apiKey: string, private baseUrl: string, private defaultImageModel: string) {}
+
+  listModels(kind?: MediaKind): MediaModel[] {
+    return kind ? OPENROUTER_CATALOG.filter((m) => m.kind === kind) : OPENROUTER_CATALOG;
+  }
+
+  async submit(req: GenRequest): Promise<GenJob> {
+    const model = req.model ?? this.defaultImageModel;
+    const record = newJob(req, model);
+    if (req.kind === "video") {
+      record.job.status = "error";
+      record.job.error =
+        "OpenRouter doesn't host video generation — set GEMINI_API_KEY (or MEDIA_GEN_PROVIDER=vertex) for Veo.";
+      return record.job;
+    }
+    try {
+      const res = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://localhost/agent-studio",
+          "X-Title": "reel-anti",
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "user", content: req.prompt }],
+          modalities: ["image", "text"],
+        }),
+      });
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "");
+        throw new Error(`OpenRouter returned ${res.status}: ${detail.slice(0, 200)}`);
+      }
+      const data = (await res.json()) as {
+        choices?: { message?: { images?: { image_url?: { url?: string } }[] } }[];
+      };
+      const url = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+      if (!url) throw new Error("OpenRouter returned no image (model may not support image output)");
+      record.job.status = "done";
+      record.job.resultUrls = [url];
+    } catch (e) {
+      record.job.status = "error";
+      record.job.error = e instanceof Error ? e.message : String(e);
+    }
+    return record.job;
+  }
+
+  async poll(jobId: string): Promise<GenJob> {
+    return STORE.get(jobId)?.job ?? { id: jobId, kind: "image", status: "error", prompt: "", model: "", error: "unknown job id" };
+  }
+}
+
 let cached: MediaGenProvider | null = null;
 
 /**
- * Resolve the media-gen provider from the environment.
+ * Resolve the media-gen provider from the environment (mirrors llm.ts precedence).
  * - MEDIA_GEN_PROVIDER=stub → deterministic stub (offline/dev/tests).
- * - else GEMINI_API_KEY → Gemini (Imagen/Veo).
+ * - MEDIA_GEN_PROVIDER=gemini OR (default when only GEMINI_API_KEY is set) → Gemini (Imagen/Veo).
+ * - else OPENROUTER_API_KEY present → OpenRouter (image generation; video needs Gemini/Vertex).
  */
 export const getMediaProvider = (): MediaGenProvider => {
   if (cached) return cached;
   const preferred = process.env.MEDIA_GEN_PROVIDER?.toLowerCase();
   if (preferred === "stub") return (cached = new StubMediaProvider());
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("No media-gen credential — set GEMINI_API_KEY, or MEDIA_GEN_PROVIDER=stub for offline.");
+  const makeGemini = () => {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("MEDIA_GEN_PROVIDER=gemini requires GEMINI_API_KEY.");
+    return (cached = new GeminiMediaProvider(new GoogleGenAI({ apiKey })));
+  };
+  if (preferred === "gemini") return makeGemini();
+
+  // Default to OpenRouter when its key is present (same key as the LLM agent) —
+  // unblocks live image generation without a Google credential.
+  if (preferred === "openrouter" || (!preferred && process.env.OPENROUTER_API_KEY)) {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) throw new Error("MEDIA_GEN_PROVIDER=openrouter requires OPENROUTER_API_KEY.");
+    const baseUrl = (process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1").replace(/\/$/, "");
+    const model = process.env.OPENROUTER_IMAGE_MODEL ?? "google/gemini-2.5-flash-image";
+    return (cached = new OpenRouterMediaProvider(apiKey, baseUrl, model));
   }
-  return (cached = new GeminiMediaProvider(new GoogleGenAI({ apiKey })));
+
+  if (process.env.GEMINI_API_KEY) return makeGemini();
+  throw new Error("No media-gen credential — set OPENROUTER_API_KEY or GEMINI_API_KEY, or MEDIA_GEN_PROVIDER=stub for offline.");
 };
 
 /** Test seam: reset the memoized provider (so env changes take effect). */

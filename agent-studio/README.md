@@ -77,9 +77,13 @@ the protocol and executor with `pnpm test:mcp`.
 A provider seam (`lib/agent/media-gen.ts`, sibling to `llm.ts`) generates stills and video and drops
 them on the timeline:
 
-- **Gemini** (Imagen for images, Veo for video) — set `GEMINI_API_KEY`.
-- **Stub** — `MEDIA_GEN_PROVIDER=stub` returns a real placeholder image so the whole submit → poll →
-  place flow is exercised offline (`pnpm test:media`), no credits spent.
+- **OpenRouter** (default when `OPENROUTER_API_KEY` is set) — **image** generation via image-output
+  models (`google/gemini-2.5-flash-image` aka Nano Banana, etc.) through the chat-completions API with
+  `modalities:["image"]`. Reuses the same key as the LLM agent — no Google credential needed. Video is
+  not hosted on OpenRouter.
+- **Gemini** (`MEDIA_GEN_PROVIDER=gemini` + `GEMINI_API_KEY`) — Imagen for images, **Veo** for video.
+- **Stub** — `MEDIA_GEN_PROVIDER=stub` returns a real placeholder image/video so the whole submit →
+  poll → place flow is exercised offline (`pnpm test:media`), no credits spent.
 
 The **Generate** panel in the left nav drives this from the app: pick Image/Video, enter a prompt,
 and the result is placed at the playhead with a Recent history (thumbnail + Re-add). Routes

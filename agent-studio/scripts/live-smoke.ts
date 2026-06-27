@@ -1,6 +1,8 @@
 /** Live agent smoke across the op vocabulary: real LLM → atomic executeOps → health. */
 import { config } from "dotenv";
-config({ path: ".env.local" });
+// Mirror Next.js precedence: .env is the base, .env.local overrides it.
+config({ path: ".env" });
+config({ path: ".env.local", override: true });
 import type { ProjectJSON } from "@twick/timeline";
 import { runAgent } from "../lib/agent/run-agent";
 import { executeOps } from "../lib/twick/apply";
