@@ -71,6 +71,10 @@ const emitOperationsDeclaration = {
             height: { type: Type.NUMBER },
             radius: { type: Type.NUMBER },
             toScale: { type: Type.NUMBER },
+            // removeWords: indices into the caption's word list (spans are an
+            // MCP-only power feature; the in-app agent uses plain indices).
+            words: { type: Type.ARRAY, items: { type: Type.NUMBER } },
+            cutAggressiveness: { type: Type.STRING, enum: ["tight", "balanced", "loose"] },
           },
           required: ["op"],
         },
@@ -112,6 +116,8 @@ const emitOperationsJsonSchema = {
           height: { type: "number" },
           radius: { type: "number" },
           toScale: { type: "number" },
+          words: { type: "array", items: { type: "number" } },
+          cutAggressiveness: { type: "string", enum: ["tight", "balanced", "loose"] },
         },
         required: ["op"],
       },

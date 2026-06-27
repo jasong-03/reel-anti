@@ -96,6 +96,22 @@ const OP_SCHEMAS: Record<(typeof OP_NAMES)[number], { description: string; schem
     description: "Ken-Burns zoom on a video/image clip (toScale>1 zooms in). Defaults to the clip's full range.",
     schema: obj({ elementId: str, toScale: num, start: num, end: num }, ["elementId", "toScale"]),
   },
+  removeWords: {
+    description:
+      "Descript-style filler removal from a caption clip: ripple-delete the chosen transcript words. Use the 0-based indices from the clip's `words` list. cutAggressiveness bridges short gaps between fillers (tight|balanced|loose). Indices shift after the cut — re-read before another word edit.",
+    schema: obj(
+      {
+        elementId: str,
+        words: {
+          type: "array",
+          minItems: 1,
+          items: { oneOf: [{ type: "number" }, { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2 }] },
+        },
+        cutAggressiveness: { type: "string", enum: ["tight", "balanced", "loose"] },
+      },
+      ["elementId", "words"]
+    ),
+  },
 };
 
 export const READ_TOOLS: ToolDef[] = [

@@ -21,7 +21,7 @@ export interface AgentElementView {
   /** Short human label: text content, or media filename, or the type. */
   label: string;
   /** Word-level timings for caption clips (ms from project start), if present. */
-  words?: { word: string; startMs: number }[];
+  words?: { word: string; startMs: number; endMs: number }[];
 }
 
 export interface AgentTrackView {
@@ -72,18 +72,24 @@ const elementStart = (el: ElementJSON): number =>
  * metadata.wordsMs is a number[] of per-word start times in ms). Returned zipped
  * with the words so the agent can target individual fillers for removeSpan.
  */
-const wordsFor = (el: ElementJSON): { word: string; startMs: number }[] | undefined => {
+const wordsFor = (
+  el: ElementJSON
+): { word: string; startMs: number; endMs: number }[] | undefined => {
   const props = (el.props ?? {}) as Record<string, unknown>;
   const metadata = (el.metadata ?? {}) as Record<string, unknown>;
   const wordsMs = (props.wordsMs ?? metadata.wordsMs) as unknown;
   if (!Array.isArray(wordsMs) || wordsMs.length === 0) return undefined;
 
+  const starts = (wordsMs as number[]).map((n) => Math.round(n));
   const text = (el.t as string | undefined) ?? (props.text as string | undefined) ?? "";
   const tokens = text.split(/\s+/).filter(Boolean);
-  return (wordsMs as number[]).map((startMs, i) => ({
+  // A word ends where the next begins; the last ends at the clip end. Whole-ms —
+  // sub-ms precision is noise the model never needs and costs tokens.
+  const clipEndMs = Math.round((typeof el.e === "number" ? el.e : 0) * 1000);
+  return starts.map((startMs, i) => ({
     word: tokens[i] ?? "",
-    // Whole-ms: sub-ms precision is noise the model never needs and costs tokens.
-    startMs: Math.round(startMs),
+    startMs,
+    endMs: i + 1 < starts.length ? starts[i + 1] : clipEndMs,
   }));
 };
 

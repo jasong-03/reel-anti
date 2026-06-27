@@ -52,6 +52,19 @@ export const validateOps = (
       if (op.op === "addZoom" && target.type !== "video" && target.type !== "image") {
         errors.push(`${at}: zoom applies only to video/image clips, not ${target.type}`);
       }
+      if (op.op === "removeWords") {
+        const wordCount = target.words?.length ?? 0;
+        if (wordCount === 0) {
+          errors.push(`${at}: element "${op.elementId}" has no transcript words to remove`);
+        } else {
+          const maxIndex = Math.max(
+            ...op.words.flatMap((w) => (typeof w === "number" ? [w] : [w[0], w[1]]))
+          );
+          if (maxIndex >= wordCount) {
+            errors.push(`${at}: word index ${maxIndex} is out of range (clip has ${wordCount} words, valid 0..${wordCount - 1})`);
+          }
+        }
+      }
     }
 
     if (
@@ -64,7 +77,7 @@ export const validateOps = (
       errors.push(`${at}: end (${op.end}) must be greater than start (${op.start})`);
     }
 
-    if (op.op === "remove" || op.op === "removeSpan") destructiveCount++;
+    if (op.op === "remove" || op.op === "removeSpan" || op.op === "removeWords") destructiveCount++;
   });
 
   return { ok: errors.length === 0, errors, destructiveCount };

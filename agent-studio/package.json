@@ -12,6 +12,7 @@
     "test:offline": "tsx scripts/offline-check.ts",
     "test:apply": "tsx scripts/apply-integration.ts",
     "test:mcp": "tsx scripts/mcp-check.ts",
+    "test:transcript": "tsx scripts/transcript-check.ts",
     "test:smoke": "tsx scripts/live-smoke.ts",
     "test:loop": "tsx scripts/eval-loop.ts",
     "test:gates": "tsx scripts/gate-suite.ts"

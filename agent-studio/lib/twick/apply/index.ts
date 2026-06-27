@@ -10,6 +10,7 @@ import { applyRemoveSpan } from "./timeline";
 import { applyAddShape } from "./shapes";
 import { applyAddCaption } from "./captions";
 import { applyAddZoom } from "./motion";
+import { applyRemoveWords } from "./transcript";
 
 export type { OpResult, Resolution } from "./base";
 
@@ -45,6 +46,8 @@ export const applyOp = async (
         return await applyAddCaption(editor, op);
       case "addZoom":
         return applyAddZoom(editor, op, resolution);
+      case "removeWords":
+        return await applyRemoveWords(editor, op);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

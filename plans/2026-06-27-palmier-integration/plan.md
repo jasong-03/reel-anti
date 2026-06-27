@@ -10,7 +10,11 @@ web app **reel-anti** (`agent-studio/`, Next.js 14 + `@twick/timeline` + `@twick
   - W1: headless editor promoted to `lib/twick/headless.ts`; single `tool-registry` + stateless `execute-tool` (errors-as-data, return-what-changed); MCP Streamable-HTTP route `app/api/mcp` (token-gated, persists to shared `.data/projects` store); prompt doctrines.
   - Verified: `test:offline` 16/16, `test:apply` 8/8, `test:mcp` 17/17, `typecheck` clean, `build` clean, live 3-prompt smoke 3/3, **MCP driven over HTTP end-to-end** (addText/addShape persist across calls; errors-as-data on bad field + missing id).
   - Deviation: MCP route hand-rolls spec-compliant JSON-RPC (MCP = JSON-RPC/HTTP) using the SDK's protocol-version constants; the SDK's full Node transport can drop in later for server-initiated SSE. `@twick/timeline` is marked a server webpack external so it runs headless at runtime instead of being bundled (React `createContext` interop).
-- ⏭️ Next: Phase 2 (W4 generative AI + W5 transcript editing), or W3 keyframe spike.
+- 🚧 **Phase 2 — W5 transcript editing: CORE shipped** (2026-06-27, uncommitted).
+  - `lib/twick/transcript.ts` pure word-cut planner (resolveSelections + planWordCuts, tight/balanced/loose gap-merge); `removeWords` op (11th op) applied as right-to-left ripple deletes (one undo); serialize surfaces indexed `[idx:word@start-end]` word ranges; wired into validate-ops (index-range guard + destructive), tool-registry/MCP, the in-app LLM schema, and the prompt.
+  - Verified: `test:transcript` 18/18, all prior suites green, typecheck + build clean, and a **live agent turn** correctly emitted `removeWords words=[1,4]` to strip both "um" fillers.
+  - Deferred (honest scope): live transcription as the *source* of `wordsMs` (`@twick/cloud-transcript`, key/quota-gated) and smart `add_captions` phrase-chunking — the cut engine is done and works on any caption that already carries word timings.
+- ⏭️ Next: W4 generative AI (Imagen/Veo), then W3 keyframe spike.
 
 ## ⚠️ License rule (non-negotiable)
 palmier-pro is **GPL-3.0**. We **reimplement ideas/algorithms in our own TypeScript** — we do NOT

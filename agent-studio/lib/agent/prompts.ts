@@ -22,8 +22,9 @@ The ONLY operations you may emit:
 - addShape     { shape: "rect"|"circle"|"icon", start, end, fill?, width?, height?, radius?, src?, x?, y? } — add a motion-graphic shape (rect uses width/height, circle uses radius, icon uses src).
 - addCaption   { text, start, end } — add a caption onto the caption track.
 - addZoom      { elementId, toScale, start?, end? } — Ken-Burns zoom on a video/image clip (toScale>1 zooms in). Defaults to the clip's full range.
+- removeWords  { elementId, words: number[], cutAggressiveness?: "tight"|"balanced"|"loose" } — Descript-style: ripple-delete the chosen transcript words from a caption clip.
 
-TRANSCRIPT / FILLER WORDS: caption elements may include word-level timings ("words" in the timeline view, ms). To cut fillers ("um", repeats), emit one removeSpan per word range you want gone, using those timings (converted to seconds).
+TRANSCRIPT / FILLER WORDS: caption elements may include word-level timings ("words" in the timeline view, each with an index and ms range). To cut fillers ("um", repeats), prefer ONE removeWords op listing the 0-based word indices — it computes the minimal cut ranges and applies them as a single change. (Word indices shift after a cut, so do all word removals for a clip in one removeWords call.)
 
 RULES:
 1. Use the EXACT element ids from the provided timeline (e.g. "e-AbC123"). Never invent ids.
@@ -47,14 +48,18 @@ const MAX_WORDS_SHOWN = 60;
 const fmtElement = (e: AgentTimelineView["elements"][number]): string => {
   const base = `  #${e.index} id=${e.id} ${e.type} [${e.start}s–${e.end}s] track=${e.trackType} "${e.label}"`;
   if (!e.words?.length) return base;
-  const fmt = (w: { word: string; startMs: number }) => `${w.word}@${w.startMs}ms`;
+  // `idx:word@start-endms` — idx is the 0-based index removeWords targets.
+  const fmt = (w: { word: string; startMs: number; endMs: number }, i: number) =>
+    `${i}:${w.word}@${w.startMs}-${w.endMs}ms`;
   let words: string;
   if (e.words.length <= MAX_WORDS_SHOWN) {
     words = e.words.map(fmt).join(" ");
   } else {
     const half = Math.floor(MAX_WORDS_SHOWN / 2);
-    const head = e.words.slice(0, half).map(fmt).join(" ");
-    const tail = e.words.slice(-half).map(fmt).join(" ");
+    const head = e.words.slice(0, half).map((w, i) => fmt(w, i)).join(" ");
+    // Preserve absolute indices in the tail so removeWords targets stay correct.
+    const tailStart = e.words.length - half;
+    const tail = e.words.slice(tailStart).map((w, j) => fmt(w, tailStart + j)).join(" ");
     words = `${head} … (${e.words.length - MAX_WORDS_SHOWN} words elided) … ${tail}`;
   }
   return `${base}\n      words: ${words}`;

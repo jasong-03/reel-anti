@@ -107,6 +107,26 @@ export const addZoomOp = z.object({
   end: seconds.optional(),
 }).strict();
 
+export const removeWordsOp = z.object({
+  op: z.literal("removeWords"),
+  /** The caption clip whose transcript words are being cut. */
+  elementId,
+  /**
+   * Words to remove, by their 0-based index in the clip's "words" list. Each
+   * entry is a single index or an inclusive [from, to] index span.
+   */
+  words: z
+    .array(
+      z.union([
+        z.number().int().nonnegative(),
+        z.tuple([z.number().int().nonnegative(), z.number().int().nonnegative()]),
+      ])
+    )
+    .min(1, "select at least one word to remove"),
+  /** How greedily to bridge short kept gaps between fillers. Default "balanced". */
+  cutAggressiveness: z.enum(["tight", "balanced", "loose"]).optional(),
+}).strict();
+
 export const opSchema = z.discriminatedUnion("op", [
   addTextOp,
   addMediaOp,
@@ -118,6 +138,7 @@ export const opSchema = z.discriminatedUnion("op", [
   addShapeOp,
   addCaptionOp,
   addZoomOp,
+  removeWordsOp,
 ]);
 
 export type Op = z.infer<typeof opSchema>;
@@ -167,4 +188,5 @@ export const OP_NAMES = [
   "addShape",
   "addCaption",
   "addZoom",
+  "removeWords",
 ] as const;
