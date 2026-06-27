@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { LivePlayer, PLAYER_STATE, useLivePlayerContext } from "@twick/live-player";
 import { useTimelineContext } from "@twick/timeline";
 import { usePlayerData, type VideoProps } from "./use-player-data";
+import PreviewOverlay from "./preview-overlay";
 import {
   ChevronDown,
   Maximize,
@@ -131,7 +132,7 @@ export default function CenterWorkspace({ videoProps }: { videoProps: VideoProps
             boxShadow: "0 24px 60px -28px rgba(0,0,0,0.8)",
           }}
         >
-          <div style={{ width: "100%", height: "100%", transform: `scale(${zoomScale})`, transformOrigin: "center", transition: "transform 0.2s ease" }}>
+          <div style={{ position: "relative", width: "100%", height: "100%", transform: `scale(${zoomScale})`, transformOrigin: "center", transition: "transform 0.2s ease" }}>
             <LivePlayer
               playing={playing}
               projectData={projectData}
@@ -142,6 +143,8 @@ export default function CenterWorkspace({ videoProps }: { videoProps: VideoProps
               onDurationChange={(d: number) => (durationRef.current = d)}
               containerStyle={{ background: "#04060c" }}
             />
+            {/* click-to-select + drag-to-move overlay (disabled while playing) */}
+            {!playing && <PreviewOverlay videoProps={vp} />}
           </div>
         </div>
       </div>
