@@ -112,6 +112,18 @@ const OP_SCHEMAS: Record<(typeof OP_NAMES)[number], { description: string; schem
       ["elementId", "words"]
     ),
   },
+  setKeyframes: {
+    description:
+      "Animate a video/image clip by keyframing a property. Replaces the whole track for that property. Rows are element-relative seconds: rotation = [t, degrees]; position = [t, x, y] (offset from center, px); scale = [t, sx, sy] (1 = original). Optional trailing interp per row: \"linear\"|\"hold\"|\"smooth\". Empty keyframes clears the track.",
+    schema: obj(
+      {
+        elementId: str,
+        property: { type: "string", enum: ["position", "scale", "rotation"] },
+        keyframes: { type: "array", items: { type: "array", items: { oneOf: [{ type: "number" }, { type: "string", enum: ["linear", "hold", "smooth"] }] } } },
+      },
+      ["elementId", "property", "keyframes"]
+    ),
+  },
 };
 
 export const READ_TOOLS: ToolDef[] = [

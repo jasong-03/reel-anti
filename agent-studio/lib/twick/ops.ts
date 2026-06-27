@@ -127,6 +127,24 @@ export const removeWordsOp = z.object({
   cutAggressiveness: z.enum(["tight", "balanced", "loose"]).optional(),
 }).strict();
 
+const interp = z.enum(["linear", "hold", "smooth"]);
+/** One keyframe row: [t, value, interp?] (rotation) or [t, x, y, interp?] (position/scale). */
+const keyframeRow = z.array(z.union([z.number(), interp])).min(2);
+
+export const setKeyframesOp = z.object({
+  op: z.literal("setKeyframes"),
+  /** Video/image clip to animate. */
+  elementId,
+  property: z.enum(["position", "scale", "rotation"]),
+  /**
+   * Keyframe rows, replacing the whole track for this property. Times are
+   * ELEMENT-RELATIVE seconds (0 = clip start). An empty array clears the track.
+   * scale (x,y multipliers, 1 = original), position (x,y offset from center, px),
+   * rotation (degrees). Optional trailing interp per row: "linear"|"hold"|"smooth".
+   */
+  keyframes: z.array(keyframeRow),
+}).strict();
+
 export const opSchema = z.discriminatedUnion("op", [
   addTextOp,
   addMediaOp,
@@ -139,6 +157,7 @@ export const opSchema = z.discriminatedUnion("op", [
   addCaptionOp,
   addZoomOp,
   removeWordsOp,
+  setKeyframesOp,
 ]);
 
 export type Op = z.infer<typeof opSchema>;
@@ -189,4 +208,5 @@ export const OP_NAMES = [
   "addCaption",
   "addZoom",
   "removeWords",
+  "setKeyframes",
 ] as const;

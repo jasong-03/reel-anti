@@ -75,6 +75,10 @@ const emitOperationsDeclaration = {
             // MCP-only power feature; the in-app agent uses plain indices).
             words: { type: Type.ARRAY, items: { type: Type.NUMBER } },
             cutAggressiveness: { type: Type.STRING, enum: ["tight", "balanced", "loose"] },
+            // setKeyframes: property + numeric rows (in-app agent uses linear interp;
+            // per-row interp tags are an MCP power feature).
+            property: { type: Type.STRING, enum: ["position", "scale", "rotation"] },
+            keyframes: { type: Type.ARRAY, items: { type: Type.ARRAY, items: { type: Type.NUMBER } } },
           },
           required: ["op"],
         },
@@ -118,6 +122,8 @@ const emitOperationsJsonSchema = {
           toScale: { type: "number" },
           words: { type: "array", items: { type: "number" } },
           cutAggressiveness: { type: "string", enum: ["tight", "balanced", "loose"] },
+          property: { type: "string", enum: ["position", "scale", "rotation"] },
+          keyframes: { type: "array", items: { type: "array", items: { type: "number" } } },
         },
         required: ["op"],
       },

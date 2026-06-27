@@ -11,6 +11,7 @@ import { applyAddShape } from "./shapes";
 import { applyAddCaption } from "./captions";
 import { applyAddZoom } from "./motion";
 import { applyRemoveWords } from "./transcript";
+import { applySetKeyframes } from "./keyframes";
 
 export type { OpResult, Resolution } from "./base";
 
@@ -48,6 +49,8 @@ export const applyOp = async (
         return applyAddZoom(editor, op, resolution);
       case "removeWords":
         return await applyRemoveWords(editor, op);
+      case "setKeyframes":
+        return applySetKeyframes(editor, op, resolution);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

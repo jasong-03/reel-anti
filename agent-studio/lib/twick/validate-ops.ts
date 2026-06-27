@@ -52,6 +52,19 @@ export const validateOps = (
       if (op.op === "addZoom" && target.type !== "video" && target.type !== "image") {
         errors.push(`${at}: zoom applies only to video/image clips, not ${target.type}`);
       }
+      if (op.op === "setKeyframes") {
+        if (target.type !== "video" && target.type !== "image") {
+          errors.push(`${at}: keyframes apply only to video/image clips, not ${target.type}`);
+        }
+        const duration = target.end - target.start;
+        for (const row of op.keyframes) {
+          const t = row[0];
+          if (typeof t !== "number" || t < 0 || t > duration + 1e-6) {
+            errors.push(`${at}: keyframe time ${t} must be element-relative seconds within 0..${duration}`);
+            break;
+          }
+        }
+      }
       if (op.op === "removeWords") {
         const wordCount = target.words?.length ?? 0;
         if (wordCount === 0) {

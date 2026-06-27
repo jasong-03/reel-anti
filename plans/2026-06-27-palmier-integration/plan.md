@@ -20,7 +20,12 @@ web app **reel-anti** (`agent-studio/`, Next.js 14 + `@twick/timeline` + `@twick
   - Verified: `test:media` 14/14 (stub), all suites green, typecheck + build clean, and **HTTP smoke**: /api/media/* + MCP `generate_image` places a persisted image element read back via get_timeline.
   - Deferred (honest scope): `import_media` byte-caching for short-lived Veo URLs, and a LIVE Imagen/Veo run (needs a valid GEMINI_API_KEY — current one is expired; structurally ready).
 - ✅ **W4 Generate UI shipped** (2026-06-27, uncommitted): left-nav "Generate" panel (`components/studio/generate-panel.tsx`) — Image/Video toggle, prompt, model + aspect selects, async poll, Recent history (thumbnail + Re-add), cost note. **Visually verified via headless-Chrome/CDP** against the stub provider: prompt → generate → poll → image placed on a new video track at the playhead.
-- ⏭️ Next: live Imagen smoke (after key refresh), or W3 keyframe spike.
+- ✅ **W3 keyframes: spike + implementation shipped** (2026-06-27, uncommitted).
+  - Spike verdict (via deep read of the Twick clone): the visualizer interpolates chained CONTIGUOUS `ElementFrameEffect` segments per frame — so keyframes need NO Twick patching. Frame effects support scale (frameSize) + position (framePosition) + rotation, on video/image only; opacity is element-level (no per-frame hook) so it's excluded.
+  - `lib/twick/keyframes.ts`: pure sampler (sampleScalar/sampleVec2, hold/linear/smooth, clamp/hold-out, smoothstep) + `expandKeyframes` (samples at a fixed timestep → dense contiguous frame-effect specs honoring our interp). `setKeyframes` op (12th): stores the bag on props + rebuilds the element's frame effects. Wired into apply/validate/registry/llm/prompt.
+  - Verified: `test:keyframes` 23/23 (sampler + expand + end-to-end through a real headless ElementFrameEffect: 61 contiguous segments, correct scale at each, healthy, clear-on-empty); all suites green, typecheck clean.
+  - Deferred (honest scope): retime hooks (trim/split/playbackRate re-clamp — keyframes are element-relative so move is unaffected and the sampler hold-clamps; full re-expansion on trim is a follow-up), opacity (no frame-effect hook), and generalizing addZoom onto the keyframe path.
+- ⏭️ Next: audit + UI verification of the full P1–P3 body; live Imagen smoke after key refresh.
 
 ## ⚠️ License rule (non-negotiable)
 palmier-pro is **GPL-3.0**. We **reimplement ideas/algorithms in our own TypeScript** — we do NOT

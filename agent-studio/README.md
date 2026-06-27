@@ -19,7 +19,8 @@ AgentChatPanel┘   (shared `editor`)         → LLM tool-call (Gemini, swappab
    └─ applyOps(editor, ops)  → preview + undo update live
 ```
 
-- **`lib/twick/ops.ts`** — the 11-op Zod contract (`addText`, `addMedia`, `trim`, `move`, `split`, `remove`, `removeSpan`, `addShape`, `addCaption`, `addZoom`, `removeWords`). Every op is `.strict()` — unknown fields are rejected with an actionable, JSON-path error the model self-corrects on.
+- **`lib/twick/ops.ts`** — the 12-op Zod contract (`addText`, `addMedia`, `trim`, `move`, `split`, `remove`, `removeSpan`, `addShape`, `addCaption`, `addZoom`, `removeWords`, `setKeyframes`). Every op is `.strict()` — unknown fields are rejected with an actionable, JSON-path error the model self-corrects on.
+- **`lib/twick/keyframes.ts`** — pure keyframe sampler (`position`/`scale`/`rotation`, interp `linear`/`hold`/`smooth`) + an expander that turns a track into dense contiguous Twick `ElementFrameEffect` segments the visualizer interpolates per frame (the proven Ken-Burns path, generalized to N keyframes; video/image only — opacity has no per-frame frame-effect hook).
 - **`lib/twick/transcript.ts`** — Descript-style word-cut planner: turns selected caption-word indices into the minimal set of ripple-delete ranges (one undo), with a `tight|balanced|loose` gap-merge knob. Powers the `removeWords` op. (Pure + deterministic; the *source* of word timings — live transcription via `@twick/cloud-transcript` — is a separate, key-gated follow-up.)
 - **`lib/twick/serialize.ts`** — compact, index-annotated timeline view the model reads.
 - **`lib/twick/apply/`** — deterministic one-op-to-one-`TimelineEditor`-call map, split by domain (`text`/`media`/`clips`/`timeline`/`shapes`/`captions`/`motion`). `executeOps` applies a batch as **one transaction** (validate up-front, roll back the whole batch on any failure — never a half-edited timeline). `apply-op.ts` re-exports it for back-compat.
@@ -96,6 +97,7 @@ pnpm test:apply     # real headless TimelineEditor apply + undo            (no k
 pnpm test:mcp       # executeOps atomic rollback + MCP JSON-RPC dispatch   (no key)
 pnpm test:transcript # word-cut planner + removeWords end-to-end           (no key)
 pnpm test:media     # media provider/job-store + generate→place flow (stub) (no key)
+pnpm test:keyframes # keyframe sampler + expand + setKeyframes end-to-end       (no key)
 pnpm test:smoke     # 3 real agent turns → atomic apply → health          (needs key)
 pnpm test:gates     # full live battery (Phases 1–3)                       (needs key)
 ```

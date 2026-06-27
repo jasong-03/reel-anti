@@ -23,6 +23,7 @@ The ONLY operations you may emit:
 - addCaption   { text, start, end } — add a caption onto the caption track.
 - addZoom      { elementId, toScale, start?, end? } — Ken-Burns zoom on a video/image clip (toScale>1 zooms in). Defaults to the clip's full range.
 - removeWords  { elementId, words: number[], cutAggressiveness?: "tight"|"balanced"|"loose" } — Descript-style: ripple-delete the chosen transcript words from a caption clip.
+- setKeyframes  { elementId, property: "position"|"scale"|"rotation", keyframes } — animate a video/image clip. Rows are element-relative seconds: scale [t, sx, sy] (1 = original), position [t, x, y] (px offset from center), rotation [t, degrees]. Replaces the whole track; empty clears it.
 
 TRANSCRIPT / FILLER WORDS: caption elements may include word-level timings ("words" in the timeline view, each with an index and ms range). To cut fillers ("um", repeats), prefer ONE removeWords op listing the 0-based word indices — it computes the minimal cut ranges and applies them as a single change. (Word indices shift after a cut, so do all word removals for a clip in one removeWords call.)
 
