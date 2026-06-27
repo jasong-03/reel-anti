@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTimelineContext } from "@twick/timeline";
 import { useLivePlayerContext } from "@twick/live-player";
-import type { ProjectJSON } from "@twick/timeline";
+import type { ProjectJSON, TrackElement } from "@twick/timeline";
 import { applyOps, type OpResult } from "@/lib/twick/apply-op";
 import type { Op } from "@/lib/twick/ops";
 import { useMediaLibrary } from "./media-library";
@@ -42,6 +42,8 @@ interface Turn {
   reverted?: boolean;
   /** Preview of an image this turn generated (data URL), shown inline in chat. */
   imageUrl?: string;
+  /** Friendly name for the generated image (used when adding it to the timeline). */
+  imageName?: string;
 }
 
 const SUGGESTIONS = ["Smooth zoom", "Blur background", "Add transition", "Add captions"];
@@ -105,7 +107,7 @@ function useReveal(text: string, on: boolean): string {
 }
 
 export default function AgentPanel({ onApplied }: { onApplied?: (info: AppliedInfo) => void }) {
-  const { editor, videoResolution } = useTimelineContext();
+  const { editor, videoResolution, setSelectedItem } = useTimelineContext();
   const { currentTime } = useLivePlayerContext();
   const { addAsset } = useMediaLibrary();
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -160,15 +162,35 @@ export default function AgentPanel({ onApplied }: { onApplied?: (info: AppliedIn
       const src = job.resultUrls?.[0];
       if (job.status !== "done" || !src) throw new Error(job.error ?? "generation did not finish");
       const name = prompt.slice(0, 60);
-      const at = Math.round(currentTime * 10) / 10;
-      const results = await applyOps(editor, [{ op: "addMedia", mediaType: "image", src, start: at, end: at + 4, name }], videoResolution);
+      // Saved to the library; placement is on the user's click (so they control it).
       addAsset({ name, src, type: "image", origin: "generated" });
-      onApplied?.({ affectedIds: results.flatMap((r) => r.affected ?? []), seekTo: at });
-      updateTurn(id, { text: `Generated an image and added it to the timeline at ${at}s. (Also saved to Assets → Your media.)`, imageUrl: src });
+      updateTurn(id, {
+        text: `Here's your image (saved to Assets → Your media). Add it to the timeline, then select it to resize & move it like a logo.`,
+        imageUrl: src,
+        imageName: name,
+      });
     } catch (err) {
       updateTurn(id, { role: "error", text: `Image generation failed: ${err instanceof Error ? err.message : String(err)}` });
     }
-  }, [push, updateTurn, editor, videoResolution, currentTime, addAsset, onApplied]);
+  }, [push, updateTurn, addAsset]);
+
+  // Place a generated image on the timeline at the playhead and select it, so the
+  // Properties panel (Scale / Position) is immediately ready to make it a logo.
+  const addImageToTimeline = useCallback(async (turnId: number, src: string, name?: string) => {
+    const at = Math.round(currentTime * 10) / 10;
+    const results = await applyOps(editor, [{ op: "addMedia", mediaType: "image", src, start: at, end: at + 4, ...(name ? { name } : {}) }], videoResolution);
+    const newId = results.flatMap((r) => r.affected ?? []).find((id) => id.startsWith("e-"));
+    if (newId) {
+      for (const tr of editor.getTimelineData()?.tracks ?? []) {
+        const live = tr.getElementById(newId);
+        // getElementById types the result Readonly; the runtime value is the live
+        // mutable element the editor selects, so the cast is safe.
+        if (live) { setSelectedItem(live as TrackElement); break; }
+      }
+    }
+    onApplied?.({ affectedIds: results.flatMap((r) => r.affected ?? []), seekTo: at });
+    setTurns((p) => p.map((t) => (t.id === turnId ? { ...t, applied: true } : t)));
+  }, [editor, videoResolution, currentTime, onApplied, setSelectedItem]);
 
   const send = useCallback(async (override?: string) => {
     const message = (override ?? input).trim();
@@ -290,7 +312,15 @@ export default function AgentPanel({ onApplied }: { onApplied?: (info: AppliedIn
             <span style={{ color: "var(--text-2)" }}>“Add a cinematic zoom from 5s to 8s”</span>
           </div>
         )}
-        {turns.map((t) => <TurnView key={t.id} turn={t} onAdd={() => addToTimeline(t.id)} onRevert={() => revert(t.id)} />)}
+        {turns.map((t) => (
+          <TurnView
+            key={t.id}
+            turn={t}
+            onAdd={() => addToTimeline(t.id)}
+            onRevert={() => revert(t.id)}
+            onAddImage={() => t.imageUrl && void addImageToTimeline(t.id, t.imageUrl, t.imageName)}
+          />
+        ))}
         {busy && (
           <div className="msg-ai fade-in" style={{ display: "flex", alignItems: "center", gap: 7 }}>
             <span className="thinking-dot" /> <span style={{ color: "var(--text-2)" }}>Thinking…</span>
@@ -333,7 +363,7 @@ export default function AgentPanel({ onApplied }: { onApplied?: (info: AppliedIn
   );
 }
 
-function TurnView({ turn, onAdd, onRevert }: { turn: Turn; onAdd: () => void; onRevert: () => void }) {
+function TurnView({ turn, onAdd, onRevert, onAddImage }: { turn: Turn; onAdd: () => void; onRevert: () => void; onAddImage: () => void }) {
   const reveal = useReveal(turn.text, turn.role === "ai");
 
   if (turn.role === "user") return <div className="msg-user fade-in">{turn.text}</div>;
@@ -351,6 +381,17 @@ function TurnView({ turn, onAdd, onRevert }: { turn: Turn; onAdd: () => void; on
           alt="Generated image"
           style={{ width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: 10, border: "1px solid var(--border)", marginBottom: 10, display: "block" }}
         />
+      )}
+
+      {turn.imageUrl && !turn.applied && (
+        <button className="btn" onClick={onAddImage} style={{ height: 34, width: "100%", justifyContent: "center", borderColor: "rgba(14,165,255,0.4)", color: "var(--accent-hover)" }}>
+          <Check width={16} /> Add to timeline
+        </button>
+      )}
+      {turn.imageUrl && turn.applied && (
+        <div style={{ display: "flex", alignItems: "center", gap: 7, color: "var(--success)", fontSize: 12.5, fontWeight: 500 }}>
+          <Check width={15} /> Added — select it on the timeline, then use Properties → Scale &amp; Position.
+        </div>
       )}
 
       {ops.length > 0 && (
