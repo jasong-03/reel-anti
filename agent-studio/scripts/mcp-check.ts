@@ -84,6 +84,15 @@ async function main() {
 
     const unknownTool = await executeTool("frobnicate", {}, { project: SEED_TITLES });
     check("unknown tool: errors-as-data", unknownTool.isError && /unknown tool/.test(unknownTool.content));
+
+    // H1: addMedia op works headless via JSON append (Twick's decode is browser-only).
+    const media = await executeTool(
+      "addMedia",
+      { mediaType: "image", src: "https://example.com/a.jpg", start: 0, end: 4 },
+      { project: { version: 1, tracks: [] } as ProjectJSON, resolution: RES }
+    );
+    check("addMedia tool: places media headless (no ELEMENT_NOT_ADDED)", !media.isError && !!media.project);
+    check("addMedia tool: image element present", !!media.project?.tracks.some((t) => t.elements.some((e) => e.type === "image")));
   }
 
   // ── MCP JSON-RPC dispatch ──────────────────────────────────────────────────
@@ -118,7 +127,26 @@ async function main() {
     const text = !Array.isArray(read) && read ? (read.result as { content: { text: string }[] }).content[0].text : "";
     check("mcp tools/call: op persisted across calls (read-back sees it)", /MCP Wins/.test(text));
 
+    // C1: a JSON-RPC BATCH of two edits to the same project must chain (per-project
+    // lock), not clobber — both must persist, not just the last.
+    const BID = "__mcp_batch__";
+    await fs.rm(path.join(process.cwd(), ".data", "projects", `${BID}.json`), { force: true });
+    await dispatch(
+      [
+        { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "addText", arguments: { text: "Batch A", start: 0, end: 2 } } },
+        { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "addText", arguments: { text: "Batch B", start: 3, end: 5 } } },
+      ],
+      { projectId: BID }
+    );
+    const readBatch = await dispatch(
+      { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "get_timeline", arguments: {} } },
+      { projectId: BID }
+    );
+    const batchText = !Array.isArray(readBatch) && readBatch ? (readBatch.result as { content: { text: string }[] }).content[0].text : "";
+    check("mcp batch: both edits chained + persisted (C1)", /Batch A/.test(batchText) && /Batch B/.test(batchText));
+
     await fs.rm(path.join(process.cwd(), ".data", "projects", `${PID}.json`), { force: true });
+    await fs.rm(path.join(process.cwd(), ".data", "projects", `${BID}.json`), { force: true });
   }
 
   console.log(`\nMCP check: ${failures === 0 ? "ALL PASS" : `${failures} FAILED`}`);

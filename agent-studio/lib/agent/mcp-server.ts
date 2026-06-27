@@ -1,6 +1,6 @@
 import { LATEST_PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS } from "@modelcontextprotocol/sdk/types.js";
 import { ALL_TOOLS, getToolDef } from "./tool-registry";
-import { loadProject, saveProject } from "./mcp-store";
+import { loadProject, saveProject, withProjectLock } from "./mcp-store";
 import { logUsage } from "./usage-log";
 
 // `execute-tool` transitively imports @twick/timeline VALUES, which register React
@@ -101,9 +101,15 @@ export const handleMessage = async (
       const args = (params.arguments ?? {}) as Record<string, unknown>;
       try {
         const executeTool = await loadExecutor();
-        const project = await loadProject(opts.projectId);
-        const call = await executeTool(name, args, { project });
-        if (call.project) await saveProject(opts.projectId, call.project);
+        // Load → execute → save under a per-project lock so a JSON-RPC batch or
+        // concurrent calls chain their edits instead of each starting from the
+        // same pre-batch project and clobbering the others.
+        const call = await withProjectLock(opts.projectId, async () => {
+          const project = await loadProject(opts.projectId);
+          const result = await executeTool(name, args, { project });
+          if (result.project) await saveProject(opts.projectId, result.project);
+          return result;
+        });
         // Diagnostics trail: external tool calls land in the same usage log as the
         // in-app agent, tagged source:"mcp", so failing prompts are visible across
         // both front-ends. Fire-and-forget — must never break the call.

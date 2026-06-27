@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import { dispatch } from "@/lib/agent/mcp-server";
 import { isValidProjectId } from "@/lib/agent/mcp-store";
 
@@ -23,14 +24,23 @@ export const dynamic = "force-dynamic";
 const unauthorized = (msg: string, status: number) =>
   NextResponse.json({ error: msg }, { status });
 
+/** Constant-time string compare that tolerates length differences. */
+const safeEqual = (a: string, b: string): boolean => {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
+};
+
 const authorize = (request: Request): { ok: true } | { ok: false; response: NextResponse } => {
   const token = process.env.MCP_TOKEN;
   if (!token) {
     return { ok: false, response: unauthorized("MCP server disabled — set MCP_TOKEN to enable it", 503) };
   }
   const header = request.headers.get("authorization") ?? "";
-  const provided = header.startsWith("Bearer ") ? header.slice(7) : "";
-  if (provided !== token) {
+  // Case-insensitive scheme (RFC 7235); constant-time secret comparison.
+  const provided = /^bearer\s+/i.test(header) ? header.replace(/^bearer\s+/i, "") : "";
+  if (!provided || !safeEqual(provided, token)) {
     return { ok: false, response: unauthorized("missing or invalid bearer token", 401) };
   }
   return { ok: true };

@@ -122,7 +122,8 @@ export const removeWordsOp = z.object({
         z.tuple([z.number().int().nonnegative(), z.number().int().nonnegative()]),
       ])
     )
-    .min(1, "select at least one word to remove"),
+    .min(1, "select at least one word to remove")
+    .max(500, "too many word selections"),
   /** How greedily to bridge short kept gaps between fillers. Default "balanced". */
   cutAggressiveness: z.enum(["tight", "balanced", "loose"]).optional(),
 }).strict();
@@ -142,7 +143,7 @@ export const setKeyframesOp = z.object({
    * scale (x,y multipliers, 1 = original), position (x,y offset from center, px),
    * rotation (degrees). Optional trailing interp per row: "linear"|"hold"|"smooth".
    */
-  keyframes: z.array(keyframeRow),
+  keyframes: z.array(keyframeRow).max(1000, "too many keyframes"),
 }).strict();
 
 export const opSchema = z.discriminatedUnion("op", [

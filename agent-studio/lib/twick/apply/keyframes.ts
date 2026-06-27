@@ -104,14 +104,19 @@ export const applySetKeyframes = (
     };
     return new ElementFrameEffect(clipStart + sp.s, clipStart + sp.e).setProps(fxProps);
   });
+  // setKeyframes OWNS the element's frame effects — it rebuilds them from the bag,
+  // so any prior effects (e.g. a manual addZoom) are replaced. Flag that so the
+  // caller isn't surprised by a silently-dropped zoom.
+  const hadEffects = (el.getFrameEffects()?.length ?? 0) > 0;
   el.setFrameEffects(effects);
   editor.updateElement(el);
 
   const count =
     op.property === "rotation" ? bag.rotation?.length ?? 0 : bag[op.property]?.length ?? 0;
+  const replaced = hadEffects && (bag.position || bag.scale || bag.rotation) ? " (replaced existing frame effects)" : "";
   return ok(
     op.op,
-    `Set ${count} ${op.property} keyframe(s) on ${op.elementId} (${effects.length} frame segments)`,
+    `Set ${count} ${op.property} keyframe(s) on ${op.elementId} (${effects.length} frame segments)${replaced}`,
     [op.elementId]
   );
 };

@@ -70,8 +70,11 @@ export const validateOps = (
         if (wordCount === 0) {
           errors.push(`${at}: element "${op.elementId}" has no transcript words to remove`);
         } else {
-          const maxIndex = Math.max(
-            ...op.words.flatMap((w) => (typeof w === "number" ? [w] : [w[0], w[1]]))
+          // reduce, not Math.max(...spread): a large selection array would blow the
+          // call-stack/arg limit and throw out of the errors-as-data path.
+          const maxIndex = op.words.reduce<number>(
+            (m, w) => (typeof w === "number" ? Math.max(m, w) : Math.max(m, w[0], w[1])),
+            -1
           );
           if (maxIndex >= wordCount) {
             errors.push(`${at}: word index ${maxIndex} is out of range (clip has ${wordCount} words, valid 0..${wordCount - 1})`);

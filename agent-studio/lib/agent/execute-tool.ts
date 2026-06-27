@@ -5,7 +5,7 @@ import { executeOps } from "../twick/apply";
 import { makeNodeEditor, healthCheck } from "../twick/headless";
 import { appendMediaElement } from "../twick/apply/media-json";
 import { getToolDef } from "./tool-registry";
-import { getMediaProvider, getJob, type GenJob, type MediaKind } from "./media-gen";
+import { getMediaProvider, getJob, deleteJob, type GenJob, type MediaKind } from "./media-gen";
 
 /**
  * The shared tool executor — the single place a tool call becomes a timeline
@@ -93,6 +93,7 @@ const placeJobResult = (job: GenJob, args: Record<string, unknown>, ctx: ToolCon
 
   const health = healthCheck(placed.project);
   if (!health.ok) return err(`placing the generated ${mediaType} corrupted the timeline:\n- ${health.issues.join("\n- ")}`);
+  deleteJob(job.id); // placed — free any retained media bytes
   return {
     content: `Generated ${mediaType} placed on the timeline (id ${placed.elementId}, from ${start}s). Trust this id.`,
     isError: false,
@@ -131,9 +132,35 @@ export const executeTool = async (
 
   if (def.kind === "media") return executeMediaTool(name, args, ctx);
 
+  // addMedia decodes media via the DOM inside Twick (getVideoMeta/getImageDimensions
+  // use document.createElement), which throws headless. We append the equivalent
+  // ElementJSON directly — the same JSON the browser renders — so the MCP addMedia
+  // tool actually works instead of failing with ELEMENT_NOT_ADDED.
+  if (name === "addMedia") return placeMediaHeadless(args, ctx);
+
   // Op tool: reconstruct the discriminated op and run it through the same Zod +
   // apply path the in-app agent uses, so the two front-ends can never diverge.
   return applyRawOp({ op: name, ...args }, ctx.project, resolution);
+};
+
+const placeMediaHeadless = (args: Record<string, unknown>, ctx: ToolContext): ToolCallResult => {
+  const parsed = parseOp({ op: "addMedia", ...args });
+  if (!parsed.ok) return err(`invalid arguments for "addMedia":\n${parsed.error}`);
+  if (parsed.op.op !== "addMedia") return err("internal error: expected addMedia op");
+  const op = parsed.op;
+  const placed = appendMediaElement(ctx.project, {
+    mediaType: op.mediaType,
+    src: op.src,
+    start: op.start,
+    ...(op.end !== undefined ? { end: op.end } : {}),
+  });
+  const health = healthCheck(placed.project);
+  if (!health.ok) return err(`adding ${op.mediaType} corrupted the timeline:\n- ${health.issues.join("\n- ")}`);
+  return {
+    content: `Added ${op.mediaType} (id ${placed.elementId}) from ${op.start}s. Trust this id — do not re-read the timeline before your next edit.`,
+    isError: false,
+    project: placed.project,
+  };
 };
 
 /**

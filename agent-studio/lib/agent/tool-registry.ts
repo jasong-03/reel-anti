@@ -98,7 +98,7 @@ const OP_SCHEMAS: Record<(typeof OP_NAMES)[number], { description: string; schem
   },
   removeWords: {
     description:
-      "Descript-style filler removal from a caption clip: ripple-delete the chosen transcript words. Use the 0-based indices from the clip's `words` list. cutAggressiveness bridges short gaps between fillers (tight|balanced|loose). Indices shift after the cut — re-read before another word edit.",
+      "Descript-style filler removal driven by a caption clip's transcript: ripple-delete the time spans of the chosen words ACROSS ALL TRACKS (audio/video shift too, like Descript), using the 0-based indices from the clip's `words` list. cutAggressiveness bridges short gaps between fillers (tight|balanced|loose). Indices shift after the cut — re-read before another word edit.",
     schema: obj(
       {
         elementId: str,

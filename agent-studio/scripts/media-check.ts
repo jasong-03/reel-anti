@@ -53,6 +53,12 @@ async function main() {
     const jobId = started.content.match(/job_[\w-]+/)?.[0] ?? "";
     const placed = await executeTool("check_media_job", { jobId, start: 0 }, { project: EMPTY });
     check("check_media_job: places the finished video", !placed.isError && mediaEls(placed.project, "video").length === 1);
+    // H2: stub video must be a real, loadable URL (not a PNG data URL).
+    const vsrc = String(mediaEls(placed.project, "video")[0]?.props?.src ?? "");
+    check("generate_video: stub yields a loadable video URL (not PNG)", /\.mp4($|\?)/.test(vsrc) && !vsrc.startsWith("data:image"));
+    // M3: the job is evicted after placement.
+    const reuse = await executeTool("check_media_job", { jobId, start: 0 }, { project: EMPTY });
+    check("check_media_job: job evicted after placement", reuse.isError && /unknown jobId/.test(reuse.content));
   }
 
   // ── errors-as-data ─────────────────────────────────────────────────────────

@@ -114,7 +114,11 @@ export default function GeneratePanel({ onApplied }: { onApplied?: (i: AppliedIn
             setJob(id, { status: "error", error: job.error ?? "generation failed" });
             return;
           }
-          const t = setTimeout(tick, 2500); // still pending — poll again
+          // still pending — poll again; the timer removes itself from the set when it fires.
+          const t = setTimeout(() => {
+            timers.current.delete(t);
+            void tick();
+          }, 2500);
           timers.current.add(t);
         } catch {
           if (mounted.current) setJob(id, { status: "error", error: "network error while polling" });

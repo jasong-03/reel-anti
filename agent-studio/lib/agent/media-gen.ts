@@ -53,8 +53,12 @@ export interface MediaGenProvider {
 }
 
 // ── Shared in-memory job store ───────────────────────────────────────────────
-// Single-process (dev/prod node server) job tracking. The `operation` handle is
-// provider-internal (e.g. a Veo long-running operation) and never serialized.
+// Single-process job tracking: `submit` and the later `poll`/place must hit the
+// SAME Node process (a multi-instance/serverless deployment needs a shared cache
+// or DB here — images complete synchronously so only async video is affected).
+// The `operation` handle is provider-internal (e.g. a Veo long-running operation)
+// and never serialized. Capped + evicted so generated image bytes aren't pinned
+// for the process lifetime.
 interface JobRecord {
   job: GenJob;
   operation?: unknown;
@@ -62,10 +66,22 @@ interface JobRecord {
   pollsLeft?: number;
 }
 const STORE = new Map<string, JobRecord>();
+const MAX_JOBS = 50;
 
 export const getJob = (id: string): GenJob | undefined => STORE.get(id)?.job;
 
+/** Drop a job once its result is placed, freeing any retained media bytes. */
+export const deleteJob = (id: string): void => {
+  STORE.delete(id);
+};
+
 const newJob = (req: GenRequest, model: string, status: JobStatus = "pending"): JobRecord => {
+  // Evict the oldest entries (Map preserves insertion order) before adding.
+  while (STORE.size >= MAX_JOBS) {
+    const oldest = STORE.keys().next().value;
+    if (oldest === undefined) break;
+    STORE.delete(oldest);
+  }
   const job: GenJob = { id: `job_${randomUUID()}`, kind: req.kind, status, prompt: req.prompt, model };
   const record: JobRecord = { job };
   STORE.set(job.id, record);
@@ -76,6 +92,9 @@ const newJob = (req: GenRequest, model: string, status: JobStatus = "pending"): 
 // bytes (not a fake string). Content is irrelevant; the data flow is what's tested.
 const TINY_PNG =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+// A real, loadable sample video so a stub "video" generation produces a clip that
+// actually plays in the editor (Veo returns a real asset; the stub mirrors that).
+const STUB_VIDEO_URL = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
 
 // ── Deterministic stub provider (offline/dev) ───────────────────────────────
 class StubMediaProvider implements MediaGenProvider {
@@ -102,7 +121,9 @@ class StubMediaProvider implements MediaGenProvider {
       record.pollsLeft = (record.pollsLeft ?? 0) - 1;
       if (record.pollsLeft <= 0) {
         record.job.status = "done";
-        record.job.resultUrls = [`data:image/png;base64,${TINY_PNG}`];
+        record.job.resultUrls = [
+          record.job.kind === "video" ? STUB_VIDEO_URL : `data:image/png;base64,${TINY_PNG}`,
+        ];
       }
     }
     return record.job;
