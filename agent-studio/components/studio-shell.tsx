@@ -54,13 +54,17 @@ function StudioLayout() {
   const [nav, setNav] = useState<PanelId>("agent");
   const [glowIds, setGlowIds] = useState<Set<string>>(new Set());
   const glowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const seekNudge = useRef(0);
 
   const onApplied = useCallback(({ affectedIds, seekTo }: AppliedInfo) => {
     setGlowIds(new Set(affectedIds));
     if (seekTo !== undefined) {
       setPlayerState(PLAYER_STATE.PAUSED);
       setCurrentTime(seekTo);
-      setSeekTime(seekTo);
+      // Alternating sub-ms nudge so the visualizer re-seeks even when seekTo equals
+      // the current playhead — freshly-added media then renders immediately.
+      seekNudge.current = seekNudge.current ? 0 : 1e-4;
+      setSeekTime(seekTo + seekNudge.current);
     }
     if (glowTimer.current) clearTimeout(glowTimer.current);
     glowTimer.current = setTimeout(() => setGlowIds(new Set()), 1600);
