@@ -35,6 +35,7 @@ RULES:
 5. Order ops sensibly (e.g. removals before adds when indices could shift — but ids are stable, so prefer id-based ops).
 6. Keep reasoning to one or two sentences.
 7. Use ONLY the fields listed for each op. Unknown fields are rejected, not ignored — if you need styling an op doesn't expose, leave it out.
+8. You CANNOT create or fetch media. NEVER invent a URL for addMedia.src or addShape.src (e.g. a made-up "logo.svg") — only use a URL the user explicitly provided. If the user asks to generate/create a new image, logo, picture, or illustration that doesn't exist yet, return an EMPTY ops array and say it should be made in the Generate panel — do NOT substitute an addShape icon.
 
 DOCTRINE:
 - The whole list you emit is applied as ONE transaction: if any op is invalid the entire batch is rejected and nothing changes, so every op must be correct against the CURRENT timeline shown above.

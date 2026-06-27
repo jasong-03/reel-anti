@@ -44,6 +44,19 @@ interface Turn {
 
 const SUGGESTIONS = ["Smooth zoom", "Blur background", "Add transition", "Add captions"];
 
+// The agent edits the timeline; it cannot invent media. A request to CREATE a new
+// image/logo/illustration is routed to the real generator instead, so the model
+// can't fall back to a made-up icon URL. Edit verbs keep the request on the agent.
+const VISUAL_NOUN = /\b(image|picture|photo|logo|icon|mascot|illustration|art(?:work)?|graphic|background|thumbnail|drawing|painting|portrait|poster|banner|sticker|avatar|wallpaper|scene|render)\b/i;
+const GEN_VERB = /\b(generate|create|make|draw|render|design|produce|paint|imagine|give me)\b/i;
+const EDIT_VERB = /\b(trim|split|delete|remove|cut|move|shorten|extend|zoom|caption|subtitle|transition|mute|fade|replace|reorder|rearrange|speed)\b/i;
+const isImageGenRequest = (m: string): boolean => {
+  if (EDIT_VERB.test(m)) return false;
+  // "generate/create … <visual>", or a bare visual description like "a blue robot logo".
+  return (GEN_VERB.test(m) && VISUAL_NOUN.test(m)) || (/^(a|an|the)\s/i.test(m.trim()) && VISUAL_NOUN.test(m));
+};
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 const chipFor = (op: Op): { label: string; sub?: string; Icon: typeof TypeIcon } => {
   const range = (a?: number, b?: number) =>
     a !== undefined && b !== undefined ? `${a}s – ${b}s` : a !== undefined ? `${a}s` : undefined;
@@ -105,8 +118,14 @@ export default function AgentPanel({ onApplied }: { onApplied?: (info: AppliedIn
   const scrollDown = useCallback(() => {
     requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }));
   }, []);
-  const push = useCallback((t: Omit<Turn, "id">) => {
-    setTurns((p) => [...p, { ...t, id: idRef.current++ }]);
+  const push = useCallback((t: Omit<Turn, "id">): number => {
+    const id = idRef.current++;
+    setTurns((p) => [...p, { ...t, id }]);
+    scrollDown();
+    return id;
+  }, [scrollDown]);
+  const updateTurn = useCallback((id: number, patch: Partial<Turn>) => {
+    setTurns((p) => p.map((t) => (t.id === id ? { ...t, ...patch } : t)));
     scrollDown();
   }, [scrollDown]);
 
@@ -117,6 +136,38 @@ export default function AgentPanel({ onApplied }: { onApplied?: (info: AppliedIn
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }, []);
 
+  // Generate a real AI image from the prompt and place it on the timeline, with a
+  // live status message in the chat — this is what the user means by "make me a …".
+  const generateImageInChat = useCallback(async (prompt: string) => {
+    const id = push({ role: "ai", text: `Generating image: “${prompt}” …` });
+    try {
+      const res = await fetch("/api/media/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "image", prompt }),
+      });
+      const data = (await res.json()) as { job?: { id: string; status: string; resultUrls?: string[]; error?: string }; error?: string };
+      if (!res.ok || !data.job) throw new Error(data.error ?? `generation returned ${res.status}`);
+      let job = data.job;
+      for (let i = 0; i < 30 && job.status === "pending"; i++) {
+        await sleep(2500);
+        const r = await fetch(`/api/media/job/${job.id}`);
+        const d = (await r.json()) as { job?: typeof job };
+        if (d.job) job = d.job;
+      }
+      const src = job.resultUrls?.[0];
+      if (job.status !== "done" || !src) throw new Error(job.error ?? "generation did not finish");
+      const name = prompt.slice(0, 60);
+      const at = Math.round(currentTime * 10) / 10;
+      const results = await applyOps(editor, [{ op: "addMedia", mediaType: "image", src, start: at, end: at + 4, name }], videoResolution);
+      addAsset({ name, src, type: "image", origin: "generated" });
+      onApplied?.({ affectedIds: results.flatMap((r) => r.affected ?? []), seekTo: at });
+      updateTurn(id, { text: `Generated an image and added it to the timeline at ${at}s. (Also saved to Assets → Your media.)` });
+    } catch (err) {
+      updateTurn(id, { role: "error", text: `Image generation failed: ${err instanceof Error ? err.message : String(err)}` });
+    }
+  }, [push, updateTurn, editor, videoResolution, currentTime, addAsset, onApplied]);
+
   const send = useCallback(async (override?: string) => {
     const message = (override ?? input).trim();
     if (!message || busy) return;
@@ -125,6 +176,11 @@ export default function AgentPanel({ onApplied }: { onApplied?: (info: AppliedIn
     setBusy(true);
     push({ role: "user", text: message });
     try {
+      // Route "create me an image/logo/…" to the generator (the agent can't make media).
+      if (isImageGenRequest(message)) {
+        await generateImageInChat(message);
+        return;
+      }
       const res = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -141,7 +197,7 @@ export default function AgentPanel({ onApplied }: { onApplied?: (info: AppliedIn
     } finally {
       setBusy(false);
     }
-  }, [input, busy, editor, videoResolution, push, autoGrow]);
+  }, [input, busy, editor, videoResolution, push, autoGrow, generateImageInChat]);
 
   const addToTimeline = useCallback(async (turnId: number) => {
     const turn = turns.find((t) => t.id === turnId);
@@ -297,6 +353,17 @@ function TurnView({ turn, onAdd, onRevert }: { turn: Turn; onAdd: () => void; on
             );
           })}
         </div>
+      )}
+
+      {ops.length > 0 && (
+        <details style={{ marginBottom: 10 }}>
+          <summary style={{ cursor: "pointer", fontSize: 11.5, color: "var(--text-3)", userSelect: "none", listStyle: "none" }}>
+            ⌄ Debug: {ops.length} op{ops.length > 1 ? "s" : ""} emitted
+          </summary>
+          <pre style={{ margin: "8px 0 0", padding: 10, borderRadius: 8, background: "var(--bg-0)", border: "1px solid var(--border)", fontSize: 11, lineHeight: 1.5, color: "var(--text-2)", overflowX: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+            {JSON.stringify(ops, null, 2)}
+          </pre>
+        </details>
       )}
 
       {ops.length > 0 && !turn.applied && (
