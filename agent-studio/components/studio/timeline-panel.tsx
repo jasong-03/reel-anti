@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTimelineContext, TRACK_TYPES } from "@twick/timeline";
 import type { TrackElement, TrackJSON, ElementJSON } from "@twick/timeline";
 import { PLAYER_STATE, useLivePlayerContext } from "@twick/live-player";
-import { Cursor, Undo, Redo, Scissors, SplitIcon, Trash, More, Magnet, Search, Plus, Minus, ChevronDown } from "./icons";
+import { Cursor, Undo, Redo, Scissors, SplitIcon, Trash, More, Magnet, Search, Plus, Minus, ChevronDown, Sparkles } from "./icons";
 
 const RULER_H = 30;
 const TRACK_H = 46;
@@ -45,6 +45,19 @@ const clipLabel = (el: ElementJSON): string => {
 };
 
 const fmtTick = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
+/** Absolute [s,e] span a clip's frame effects (Ken-Burns zoom / keyframes) cover, if any. */
+const frameEffectRange = (el: ElementJSON): { s: number; e: number } | null => {
+  const fx = (el as { frameEffects?: { s?: number; e?: number }[] }).frameEffects;
+  if (!Array.isArray(fx) || fx.length === 0) return null;
+  let s = Infinity;
+  let e = -Infinity;
+  for (const f of fx) {
+    if (typeof f.s === "number") s = Math.min(s, f.s);
+    if (typeof f.e === "number") e = Math.max(e, f.e);
+  }
+  return Number.isFinite(s) && Number.isFinite(e) && e > s ? { s, e } : null;
+};
 
 type DragMode = "move" | "left" | "right";
 interface DragState { id: string; mode: DragMode; startX: number; origS: number; origE: number; }
@@ -259,6 +272,21 @@ export default function TimelinePanel({ glowIds }: { glowIds: Set<string> }) {
                         {Math.round(s * 10) / 10}s – {Math.round(e2 * 10) / 10}s
                       </span>
                       <span onPointerDown={(ev) => startDrag(ev, el, "right")} style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 7, cursor: "ew-resize" }} />
+                      {(() => {
+                        const fx = frameEffectRange(el);
+                        if (!fx) return null;
+                        const fxLeft = Math.max(2, (fx.s - s) * pps);
+                        const fxWidth = Math.max(8, (fx.e - fx.s) * pps);
+                        const label = `Motion effect (zoom / keyframes): ${Math.round(fx.s * 10) / 10}s–${Math.round(fx.e * 10) / 10}s`;
+                        return (
+                          <>
+                            {/* glowing bar marking exactly where the effect plays on the clip */}
+                            <span title={label} style={{ position: "absolute", left: fxLeft, bottom: 2, width: fxWidth, height: 4, borderRadius: 3, background: "var(--accent)", boxShadow: "0 0 8px 1px color-mix(in srgb, var(--accent) 75%, transparent)", pointerEvents: "none" }} />
+                            {/* sparkle badge so the clip reads as "has an effect" at a glance */}
+                            <span title={label} style={{ position: "absolute", left: fxLeft - 1, top: 3, color: "var(--accent)", pointerEvents: "none", display: "grid", placeItems: "center" }}><Sparkles width={11} /></span>
+                          </>
+                        );
+                      })()}
                     </div>
                   );
                 })}
