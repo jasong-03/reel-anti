@@ -18,8 +18,9 @@ web app **reel-anti** (`agent-studio/`, Next.js 14 + `@twick/timeline` + `@twick
   - `lib/agent/media-gen.ts` provider seam (sibling to llm.ts): `GeminiMediaProvider` (Imagen sync + Veo async-poll, hardcoded catalog) + deterministic `StubMediaProvider` for offline; in-memory job store; `getMediaProvider()` env resolution.
   - Routes `app/api/media/{generate,job/[id],models}`; MCP tools `generate_image` / `generate_video` / `check_media_job` (16 tools total). Images return inline; video is async (submit→poll). Headless executor appends media `ElementJSON` directly (Twick's `addMedia` decodes media → browser-only; verified `ELEMENT_NOT_ADDED` headless), so the MCP path actually places media.
   - Verified: `test:media` 14/14 (stub), all suites green, typecheck + build clean, and **HTTP smoke**: /api/media/* + MCP `generate_image` places a persisted image element read back via get_timeline.
-  - Deferred (honest scope): side-panel Generate UI, `import_media` byte-caching for short-lived Veo URLs, and a LIVE Imagen/Veo run (needs key + spends credits — structurally ready).
-- ⏭️ Next: side-panel Generate UI + live Imagen smoke, or W3 keyframe spike.
+  - Deferred (honest scope): `import_media` byte-caching for short-lived Veo URLs, and a LIVE Imagen/Veo run (needs a valid GEMINI_API_KEY — current one is expired; structurally ready).
+- ✅ **W4 Generate UI shipped** (2026-06-27, uncommitted): left-nav "Generate" panel (`components/studio/generate-panel.tsx`) — Image/Video toggle, prompt, model + aspect selects, async poll, Recent history (thumbnail + Re-add), cost note. **Visually verified via headless-Chrome/CDP** against the stub provider: prompt → generate → poll → image placed on a new video track at the playhead.
+- ⏭️ Next: live Imagen smoke (after key refresh), or W3 keyframe spike.
 
 ## ⚠️ License rule (non-negotiable)
 palmier-pro is **GPL-3.0**. We **reimplement ideas/algorithms in our own TypeScript** — we do NOT

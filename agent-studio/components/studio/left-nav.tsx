@@ -3,6 +3,7 @@
 import type { ComponentType, SVGProps } from "react";
 import {
   Sparkles,
+  Wand,
   Layers,
   Template,
   TypeIcon,
@@ -16,6 +17,7 @@ import {
 
 export type NavId =
   | "agent"
+  | "generate"
   | "assets"
   | "templates"
   | "text"
@@ -31,6 +33,7 @@ type Item = { id: NavId; label: string; Icon: ComponentType<SVGProps<SVGSVGEleme
 
 const MAIN: Item[] = [
   { id: "agent", label: "Agent", Icon: Sparkles },
+  { id: "generate", label: "Generate", Icon: Wand },
   { id: "assets", label: "Assets", Icon: Layers },
   { id: "templates", label: "Templates", Icon: Template },
   { id: "text", label: "Text", Icon: TypeIcon },

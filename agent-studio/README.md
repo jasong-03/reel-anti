@@ -80,11 +80,13 @@ them on the timeline:
 - **Stub** — `MEDIA_GEN_PROVIDER=stub` returns a real placeholder image so the whole submit → poll →
   place flow is exercised offline (`pnpm test:media`), no credits spent.
 
-Routes `POST /api/media/generate`, `GET /api/media/job/[id]`, `GET /api/media/models` drive the
-browser UI (which places media via the real `addMedia` op). The MCP/headless executor appends the
-equivalent `ElementJSON` directly, since Twick's media decode is browser-only. Images return inline;
-video is async (poll `check_media_job`). Deferred: the side-panel Generate UI, `import_media` byte
-caching for short-lived Veo URLs, and live transcription.
+The **Generate** panel in the left nav drives this from the app: pick Image/Video, enter a prompt,
+and the result is placed at the playhead with a Recent history (thumbnail + Re-add). Routes
+`POST /api/media/generate`, `GET /api/media/job/[id]`, `GET /api/media/models` back it (the browser
+places media via the real `addMedia` op). The MCP/headless executor appends the equivalent
+`ElementJSON` directly, since Twick's media decode is browser-only. Images return inline; video is
+async (poll `check_media_job`). Deferred: `import_media` byte caching for short-lived Veo URLs, and
+live transcription.
 
 ## Tests
 

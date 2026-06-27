@@ -25,6 +25,7 @@ const SAMPLE_AUDIO = [
 
 const TITLES: Record<NavId, { title: string; subtitle: string; Icon: typeof TypeIcon }> = {
   agent: { title: "Agent", subtitle: "", Icon: TypeIcon },
+  generate: { title: "Generate", subtitle: "Create AI media from a prompt", Icon: Layers },
   assets: { title: "Assets", subtitle: "Add media by URL or pick a sample", Icon: Layers },
   templates: { title: "Templates", subtitle: "Start from a preset", Icon: Template },
   text: { title: "Text", subtitle: "Add a text overlay at the playhead", Icon: TypeIcon },

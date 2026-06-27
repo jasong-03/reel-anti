@@ -7,6 +7,7 @@ import TopHeader from "./studio/top-header";
 import LeftNav, { type NavId, type PanelId } from "./studio/left-nav";
 import AgentPanel, { type AppliedInfo } from "./studio/agent-panel";
 import SidePanel from "./studio/side-panel";
+import GeneratePanel from "./studio/generate-panel";
 import { SettingsPanel, FeedbackPanel } from "./studio/meta-panels";
 import CenterWorkspace from "./studio/center-workspace";
 import PropertiesPanel from "./studio/properties-panel";
@@ -72,6 +73,8 @@ function StudioLayout() {
         <div style={{ width: "27%", minWidth: 320, maxWidth: 420, flexShrink: 0, borderRight: "1px solid var(--border)", background: "rgba(7,11,22,0.55)", minHeight: 0 }}>
           {nav === "agent" ? (
             <AgentPanel onApplied={onApplied} />
+          ) : nav === "generate" ? (
+            <GeneratePanel onApplied={onApplied} />
           ) : nav === "settings" ? (
             <SettingsPanel />
           ) : nav === "feedback" ? (

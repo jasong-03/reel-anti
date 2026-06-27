@@ -22,6 +22,12 @@ export const Layers = (p: SVGProps<SVGSVGElement>) => (
 export const Template = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M9 21V9" /></svg>
 );
+export const Wand = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M3 21L13 11" /><path d="M14 8l2 2" /><path d="M18 3l.9 2.3L21 6l-2.1.7L18 9l-.9-2.3L15 6l2.1-.7z" /></svg>
+);
+export const Image = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="1.6" /><path d="M21 15l-5-5L5 21" /></svg>
+);
 export const TypeIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M4 7V5h16v2M9 19h6M12 5v14" /></svg>
 );
